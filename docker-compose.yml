@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: deskination-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-deskination}
+      POSTGRES_USER: ${POSTGRES_USER:-deskination}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deskination_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-deskination} -d $${POSTGRES_DB:-deskination}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - deskination-network
+
+  booking-api:
+    build:
+      context: ./src/services/booking-api
+      dockerfile: Dockerfile
+    container_name: deskination-booking-api
+    restart: unless-stopped
+    ports:
+      - "${BOOKING_API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-officewho-53cec}
+      Firebase__Issuer: https://securetoken.google.com/${FIREBASE_PROJECT_ID:-officewho-53cec}
+      Firebase__Audience: ${FIREBASE_PROJECT_ID:-officewho-53cec}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-deskination};Username=${POSTGRES_USER:-deskination};Password=${POSTGRES_PASSWORD:-deskination_dev_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - deskination-network
+
+volumes:
+  postgres_data:
+    name: deskination_postgres_data
+
+networks:
+  deskination-network:
+    name: deskination-network
+    driver: bridge

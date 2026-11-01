@@ -1,18 +1,55 @@
+using System.Text.Json;
+using BookingApi.Auth;
+using BookingApi.Endpoints;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+});
+
 builder.Services.AddOpenApi();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DeskUiClient", policy =>
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
+builder.Services.AddFirebaseAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+app.UseCors("DeskUiClient");
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGet("/api/health", (IConfiguration configuration, FirebaseAuthOptions firebaseOptions) =>
+{
+    var connectionString = configuration.GetConnectionString("DefaultConnection");
+    return Results.Ok(new
+    {
+        status = "healthy",
+        service = "booking-api",
+        environment = app.Environment.EnvironmentName,
+        firebaseProjectId = firebaseOptions.ProjectId,
+        databaseConfigured = !string.IsNullOrWhiteSpace(connectionString),
+        timestampUtc = DateTimeOffset.UtcNow
+    });
+})
+.WithName("GetHealth")
+.WithTags("Diagnostics");
+
+app.MapAuthEndpoints();
 
 var summaries = new[]
 {
@@ -21,7 +58,7 @@ var summaries = new[]
 
 app.MapGet("/weatherforecast", () =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
+    var forecast = Enumerable.Range(1, 5).Select(index =>
         new WeatherForecast
         (
             DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
