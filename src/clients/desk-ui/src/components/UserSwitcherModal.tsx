@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useDeskBooking } from '../context/DeskBookingContext';
+import { useAuth } from '../hooks/useAuth';
 import { User, Role } from '../types/deskBooking';
-import { X, Check, Shield, User as UserIcon, RotateCcw, Plus } from 'lucide-react';
+import { X, Check, Shield, User as UserIcon, RotateCcw, Plus, KeyRound, LogOut, Copy } from 'lucide-react';
 
 interface UserSwitcherModalProps {
   isOpen: boolean;
@@ -9,8 +10,10 @@ interface UserSwitcherModalProps {
 }
 
 export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, onClose }) => {
-  const { users, currentUser, setCurrentUser, resetToDefaults } = useDeskBooking();
+  const { users, currentUser, setCurrentUser, upsertUser, resetToDefaults } = useDeskBooking();
+  const { firebaseUser, idToken, authMode, signOut, refreshIdToken } = useAuth();
   const [showAddUser, setShowAddUser] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
@@ -41,9 +44,18 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
       avatarColor: randomColor
     };
 
-    setCurrentUser(createdUser);
+    upsertUser(createdUser);
     setShowAddUser(false);
     onClose();
+  };
+
+  const handleCopyToken = async () => {
+    const token = idToken || (await refreshIdToken(false));
+    if (token && navigator.clipboard) {
+      await navigator.clipboard.writeText(token);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
+    }
   };
 
   return (
@@ -68,6 +80,67 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
 
         {/* Content */}
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Firebase Auth Session Banner */}
+          <div
+            className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+              authMode === 'firebase'
+                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                : 'bg-amber-50/70 border-amber-200 text-amber-950'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="font-semibold flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5" />
+                {authMode === 'firebase'
+                  ? 'Active Firebase Authentication Session'
+                  : 'Demo Workspace Session (Fallback Mode)'}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  void signOut();
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-rose-700 hover:border-rose-200 font-medium"
+              >
+                <LogOut className="w-3 h-3" />
+                Sign Out
+              </button>
+            </div>
+
+            {firebaseUser ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-700 pt-1">
+                <div>
+                  <span className="text-slate-500">Firebase UID:</span>{' '}
+                  <code className="font-mono bg-white/80 px-1 py-0.5 rounded">
+                    {firebaseUser.uid.slice(0, 14)}...
+                  </code>
+                </div>
+                <div>
+                  <span className="text-slate-500">Email Verified:</span>{' '}
+                  <strong>{firebaseUser.emailVerified ? 'Yes' : 'Pending'}</strong>
+                </div>
+                <div className="sm:col-span-2 flex items-center justify-between pt-1">
+                  <span className="text-slate-500">
+                    Mapped Role: <strong className="uppercase">{currentUser.role}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyToken()}
+                    className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 font-medium"
+                  >
+                    <Copy className="w-3 h-3" />
+                    {copiedToken ? 'Copied Bearer JWT!' : 'Copy Firebase ID Token'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-amber-800">
+                You are currently exploring the platform in Demo Mode. Click <strong>Sign Out</strong> to return to the Firebase Email/Password login screen.
+              </p>
+            )}
+          </div>
+
           {!showAddUser ? (
             <>
               <div className="space-y-2">

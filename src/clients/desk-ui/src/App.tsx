@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
 import { DeskBookingProvider, useDeskBooking } from './context/DeskBookingContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { Header } from './components/Header';
 import { BookDeskView } from './components/BookDeskView';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { AdminConsole } from './components/AdminConsole';
 import { OfficeDirectory } from './components/OfficeDirectory';
 import { UserSwitcherModal } from './components/UserSwitcherModal';
+import { AuthView } from './components/AuthView';
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<'book' | 'dashboard' | 'admin' | 'directory'>('book');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const { locations } = useDeskBooking();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3 text-slate-600">
+        <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm animate-pulse">
+          FD
+        </div>
+        <p className="text-xs font-medium">Verifying Firebase Authentication session...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthView />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900">
@@ -67,7 +86,9 @@ function MainApp() {
 export default function App() {
   return (
     <DeskBookingProvider>
-      <MainApp />
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
     </DeskBookingProvider>
   );
 }

@@ -28,3 +28,45 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Modern Web Guidance: Accessible visually-hidden utility & :user-invalid/:user-valid form states */
+.visually-hidden {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+
+.auth-field .error-msg {
+  display: none;
+}
+
+.auth-field input:user-invalid,
+.auth-field input.user-invalid-fallback {
+  border-color: #d93025;
+  background-color: #fce8e6;
+}
+
+.auth-field input:user-invalid ~ .error-msg,
+.auth-field input.user-invalid-fallback ~ .error-msg {
+  display: flex;
+}
+
+.auth-field input:user-valid,
+.auth-field input.user-valid-fallback {
+  border-color: #188038;
+}
+
+.auth-field:has(input:user-invalid) .rules-list {
+  color: #d93025;
+  font-weight: 600;
+}
+
+.auth-field:has(input:user-valid) .rules-list {
+  color: #188038;
+}

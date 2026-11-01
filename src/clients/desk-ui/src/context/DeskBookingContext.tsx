@@ -17,6 +17,7 @@ interface DeskBookingContextType {
   users: User[];
   currentUser: User;
   setCurrentUser: (user: User) => void;
+  upsertUser: (user: User) => void;
   locations: Location[];
   currentLocationId: string;
   setCurrentLocationId: (id: string) => void;
@@ -676,12 +677,28 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setSelectedSlot('full_day');
   };
 
+  const upsertUser = (user: User) => {
+    setUsers(prev => {
+      const idx = prev.findIndex(
+        u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase()
+      );
+      if (idx === -1) {
+        return [...prev, user];
+      }
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...user };
+      return next;
+    });
+    setCurrentUser(user);
+  };
+
   return (
     <DeskBookingContext.Provider
       value={{
         users,
         currentUser,
         setCurrentUser,
+        upsertUser,
         locations,
         currentLocationId,
         setCurrentLocationId,
