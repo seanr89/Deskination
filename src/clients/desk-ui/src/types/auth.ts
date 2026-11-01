@@ -8,6 +8,7 @@ export interface FirebaseClientConfig {
   storageBucket?: string;
   messagingSenderId?: string;
   appId: string;
+  measurementId?: string;
   useEmulator?: boolean;
   emulatorUrl?: string;
 }

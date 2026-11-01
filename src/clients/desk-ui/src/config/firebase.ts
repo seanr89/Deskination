@@ -28,6 +28,7 @@ export function resolveFirebaseConfig(): FirebaseClientConfig | null {
       storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET?.trim() || undefined,
       messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() || undefined,
       appId: envAppId,
+      measurementId: env.VITE_FIREBASE_MEASUREMENT_ID?.trim() || undefined,
       useEmulator: env.VITE_FIREBASE_USE_AUTH_EMULATOR === 'true',
       emulatorUrl: env.VITE_FIREBASE_AUTH_EMULATOR_URL?.trim() || 'http://localhost:9099',
     };
@@ -45,6 +46,7 @@ export function resolveFirebaseConfig(): FirebaseClientConfig | null {
         storageBucket: parsed.storageBucket?.trim(),
         messagingSenderId: parsed.messagingSenderId?.trim(),
         appId: parsed.appId.trim(),
+        measurementId: parsed.measurementId?.trim(),
         useEmulator: Boolean(parsed.useEmulator),
         emulatorUrl: parsed.emulatorUrl?.trim() || 'http://localhost:9099',
       };
@@ -84,6 +86,7 @@ export function getFirebaseApp(): FirebaseApp | null {
       storageBucket: config.storageBucket,
       messagingSenderId: config.messagingSenderId,
       appId: config.appId,
+      measurementId: config.measurementId,
     });
     return firebaseAppInstance;
   } catch (err) {
