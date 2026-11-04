@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using BookingApi.Data;
 using BookingApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BookingApi.Auth;
@@ -32,55 +34,6 @@ public sealed record AuthenticatedUserResponse(
 public static class FirebaseAuthExtensions
 {
     private const string DefaultAdminEmail = "elena.rostova@acme-corp.internal";
-
-    private static readonly IReadOnlyList<User> PlaceholderUsers =
-    [
-        new(
-            Id: "usr-sarah",
-            Name: "Sarah Chen",
-            Email: "sarah.chen@acme-corp.internal",
-            Role: Role.Employee,
-            Department: "Frontend Engineering",
-            JobTitle: "Senior Staff Engineer",
-            AvatarColor: "bg-indigo-600"
-        ),
-        new(
-            Id: "usr-marcus",
-            Name: "Marcus Vance",
-            Email: "marcus.vance@acme-corp.internal",
-            Role: Role.Employee,
-            Department: "Product Design",
-            JobTitle: "Lead Product Designer",
-            AvatarColor: "bg-emerald-600"
-        ),
-        new(
-            Id: "usr-priya",
-            Name: "Priya Patel",
-            Email: "priya.patel@acme-corp.internal",
-            Role: Role.Employee,
-            Department: "Core Infrastructure",
-            JobTitle: "Engineering Manager",
-            AvatarColor: "bg-amber-600"
-        ),
-        new(
-            Id: "usr-david",
-            Name: "David Kim",
-            Email: "david.kim@acme-corp.internal",
-            Role: Role.Employee,
-            Department: "Enterprise Sales",
-            JobTitle: "Account Executive",
-            AvatarColor: "bg-rose-600"
-        ),
-        new(
-            Id: "usr-admin-elena",
-            Name: "Elena Rostova",
-            Email: DefaultAdminEmail,
-            Role: Role.Admin,
-            Department: "Workplace Operations",
-            JobTitle: "Director of Workplace & Facilities",
-            AvatarColor: "bg-violet-600"
-        )
-    ];
 
     public static IServiceCollection AddFirebaseAuthentication(
         this IServiceCollection services,
@@ -170,35 +123,53 @@ public static class FirebaseAuthExtensions
     public static Role ResolveRole(this ClaimsPrincipal principal) =>
         principal.IsAdminUser() ? Role.Admin : Role.Employee;
 
-    public static AuthenticatedUserResponse ToAuthenticatedUserResponse(this ClaimsPrincipal principal)
+    public static AuthenticatedUserResponse ToAuthenticatedUserResponse(
+        this ClaimsPrincipal principal,
+        IEnumerable<User>? workspaceUsers = null)
     {
         var uid = principal.GetFirebaseUid() ?? "unknown-uid";
         var email = principal.GetEmail();
         var role = principal.ResolveRole();
+        var candidates = workspaceUsers ?? DeskinationSeeder.InitialUsers;
 
-        var matchedSeedUser = !string.IsNullOrWhiteSpace(email)
-            ? PlaceholderUsers.FirstOrDefault(u =>
+        var matchedUser = !string.IsNullOrWhiteSpace(email)
+            ? candidates.FirstOrDefault(u =>
                 u.Email.Equals(email, StringComparison.OrdinalIgnoreCase))
-            : null;
+            : candidates.FirstOrDefault(u =>
+                u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase) ||
+                u.Id.Equals(uid, StringComparison.OrdinalIgnoreCase));
 
-        var profile = matchedSeedUser is not null
-            ? matchedSeedUser with { Role = role }
+        var effectiveRole = role == Role.Admin || matchedUser?.Role == Role.Admin
+            ? Role.Admin
+            : Role.Employee;
+
+        var profile = matchedUser is not null
+            ? matchedUser with { Role = effectiveRole }
             : new User(
-                Id: uid,
+                Id: $"usr-{uid}",
                 Name: principal.GetDisplayName(),
                 Email: email ?? $"{uid}@firebase.local",
-                Role: role,
-                Department: role == Role.Admin ? "Workplace Operations" : "General Workspace",
-                JobTitle: role == Role.Admin ? "Office Administrator" : "Team Member",
-                AvatarColor: role == Role.Admin ? "bg-violet-600" : "bg-indigo-600"
+                Role: effectiveRole,
+                Department: effectiveRole == Role.Admin ? "Workplace Operations" : "General Operations",
+                JobTitle: effectiveRole == Role.Admin ? "Office Administrator" : "Team Member",
+                AvatarColor: effectiveRole == Role.Admin ? "bg-blue-700" : "bg-indigo-600"
             );
 
         return new AuthenticatedUserResponse(
             FirebaseUid: uid,
             Email: email,
             DisplayName: profile.Name,
-            Role: role,
+            Role: effectiveRole,
             Profile: profile
         );
     }
+
+    public static async Task<User> ResolveWorkspaceUserAsync(
+        this ClaimsPrincipal principal,
+        DeskinationDbContext db)
+    {
+        var users = await db.Users.AsNoTracking().ToListAsync();
+        return principal.ToAuthenticatedUserResponse(users).Profile;
+    }
 }
+

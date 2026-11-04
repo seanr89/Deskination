@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   User, 
   Location, 
@@ -7,11 +7,35 @@ import {
   SlotType, 
   SlotAvailability, 
   UserStats,
-  Role,
   FloorElement,
   DeskAllocationType
 } from '../types/deskBooking';
 import { INITIAL_USERS, INITIAL_LOCATIONS, INITIAL_DESKS, INITIAL_BOOKINGS } from '../mock/initialData';
+import { getCurrentIdToken, subscribeToAuthChanges } from '../services/authService';
+import {
+  fetchUsers,
+  fetchLocations,
+  fetchDesks,
+  fetchBookings,
+  upsertCurrentUser,
+  createUserApi,
+  createLocationApi,
+  updateLocationApi,
+  deleteLocationApi,
+  updateFloorElementsApi,
+  createDeskApi,
+  updateDeskApi,
+  updateDeskAllocationApi,
+  updateDeskPositionApi,
+  batchUpdateDeskPositionsApi,
+  deleteDeskApi,
+  createBookingApi,
+  cancelBookingApi,
+  checkInBookingApi,
+  approveBookingRequestApi,
+  rejectBookingRequestApi,
+  resetWorkspaceApi,
+} from '../services/apiClient';
 
 interface DeskBookingContextType {
   users: User[];
@@ -74,6 +98,17 @@ const STORAGE_KEY_BOOKINGS = 'flexdesk_bookings_v1';
 const STORAGE_KEY_CURRENT_USER = 'flexdesk_current_user_v1';
 
 const DeskBookingContext = createContext<DeskBookingContextType | undefined>(undefined);
+
+async function runAuthenticatedApi<T>(action: () => Promise<T>): Promise<T | null> {
+  try {
+    const token = await getCurrentIdToken();
+    if (!token) return null;
+    return await action();
+  } catch {
+    // Graceful fallback to local state when booking-api is offline or in Demo Mode
+    return null;
+  }
+}
 
 export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. Users
@@ -152,6 +187,39 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // 5. Active selection date & slot (today's baseline 2026-10-25)
   const [selectedDate, setSelectedDate] = useState<string>('2026-10-25');
   const [selectedSlot, setSelectedSlot] = useState<SlotType>('full_day');
+
+  // Hydrate workspace state from booking-api whenever a Firebase session becomes active
+  const hydrateFromBackend = useCallback(async () => {
+    try {
+      const token = await getCurrentIdToken();
+      if (!token) return;
+
+      const [remoteUsers, remoteLocations, remoteDesks, remoteBookings] = await Promise.all([
+        fetchUsers(),
+        fetchLocations(),
+        fetchDesks(),
+        fetchBookings(),
+      ]);
+
+      if (remoteUsers.length > 0) setUsers(remoteUsers);
+      if (remoteLocations.length > 0) setLocations(remoteLocations);
+      if (remoteDesks.length > 0) setDesks(remoteDesks);
+      if (remoteBookings.length > 0) setBookings(remoteBookings);
+    } catch {
+      // Keep localStorage state if booking-api is unreachable
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthChanges(fbUser => {
+      if (fbUser) {
+        void hydrateFromBackend();
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [hydrateFromBackend]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -276,8 +344,9 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const loc = locations.find(l => l.id === targetDesk.locationId);
     const floor = loc?.floors.find(f => f.id === targetDesk.floorId);
 
+    const optimisticId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newBooking: Booking = {
-      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: optimisticId,
       deskId: targetDesk.id,
       deskCode: targetDesk.code,
       deskName: targetDesk.name,
@@ -298,6 +367,22 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setBookings(prev => [newBooking, ...prev]);
+
+    void runAuthenticatedApi(() =>
+      createBookingApi({
+        deskId: targetDesk.id,
+        date,
+        slot,
+        notes: justification,
+        approvalReason: justification,
+        isApprovalRequest: true,
+      })
+    ).then(res => {
+      if (res?.booking) {
+        setBookings(prev => prev.map(b => (b.id === optimisticId ? res.booking! : b)));
+      }
+    });
+
     return { 
       success: true, 
       message: `Reservation request for ${targetDesk.code} submitted to office management! You will be notified once reviewed.`, 
@@ -361,8 +446,9 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const loc = locations.find(l => l.id === targetDesk.locationId);
     const floor = loc?.floors.find(f => f.id === targetDesk.floorId);
 
+    const optimisticId = `bkg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newBooking: Booking = {
-      id: `bkg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: optimisticId,
       deskId: targetDesk.id,
       deskCode: targetDesk.code,
       deskName: targetDesk.name,
@@ -382,6 +468,21 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setBookings(prev => [newBooking, ...prev]);
+
+    void runAuthenticatedApi(() =>
+      createBookingApi({
+        deskId: targetDesk.id,
+        date,
+        slot,
+        notes,
+        isApprovalRequest: false,
+      })
+    ).then(res => {
+      if (res?.booking) {
+        setBookings(prev => prev.map(b => (b.id === optimisticId ? res.booking! : b)));
+      }
+    });
+
     return { success: true, message: `Successfully booked ${targetDesk.code} for ${slot.replace('_', ' ')}!`, booking: newBooking };
   };
 
@@ -399,6 +500,13 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return b;
     }));
+
+    void runAuthenticatedApi(() => approveBookingRequestApi(bookingId, note)).then(updated => {
+      if (updated) {
+        setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
+      }
+    });
+
     return true;
   };
 
@@ -416,6 +524,13 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return b;
     }));
+
+    void runAuthenticatedApi(() => rejectBookingRequestApi(bookingId, reason)).then(updated => {
+      if (updated) {
+        setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
+      }
+    });
+
     return true;
   };
 
@@ -441,6 +556,20 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return d;
     }));
+
+    void runAuthenticatedApi(() =>
+      updateDeskAllocationApi(deskId, {
+        allocationType,
+        designatedUserId,
+        designatedUserName,
+        designatedDepartment,
+        requiresApproval,
+      })
+    ).then(updated => {
+      if (updated) {
+        setDesks(prev => prev.map(d => (d.id === deskId ? updated : d)));
+      }
+    });
   };
 
   // Cancel booking
@@ -456,6 +585,13 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return b;
     }));
+
+    void runAuthenticatedApi(() => cancelBookingApi(bookingId, reason)).then(updated => {
+      if (updated) {
+        setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
+      }
+    });
+
     return true;
   };
 
@@ -471,6 +607,13 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return b;
     }));
+
+    void runAuthenticatedApi(() => checkInBookingApi(bookingId)).then(updated => {
+      if (updated) {
+        setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
+      }
+    });
+
     return true;
   };
 
@@ -481,11 +624,24 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       id: `loc-${Date.now()}`
     };
     setLocations(prev => [...prev, newLoc]);
+
+    void runAuthenticatedApi(() => createLocationApi(newLoc)).then(created => {
+      if (created) {
+        setLocations(prev => prev.map(l => (l.id === newLoc.id ? created : l)));
+      }
+    });
+
     return newLoc;
   };
 
   const updateLocation = (updated: Location) => {
     setLocations(prev => prev.map(l => l.id === updated.id ? updated : l));
+
+    void runAuthenticatedApi(() => updateLocationApi(updated)).then(saved => {
+      if (saved) {
+        setLocations(prev => prev.map(l => (l.id === saved.id ? saved : l)));
+      }
+    });
   };
 
   const deleteLocation = (id: string) => {
@@ -498,6 +654,8 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCurrentLocationId(remaining[0].id);
       }
     }
+
+    void runAuthenticatedApi(() => deleteLocationApi(id));
   };
 
   // Admin Desk management
@@ -507,15 +665,29 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       id: `desk-${Date.now()}`
     };
     setDesks(prev => [...prev, newDesk]);
+
+    void runAuthenticatedApi(() => createDeskApi(newDesk)).then(created => {
+      if (created) {
+        setDesks(prev => prev.map(d => (d.id === newDesk.id ? created : d)));
+      }
+    });
+
     return newDesk;
   };
 
   const updateDesk = (updated: Desk) => {
     setDesks(prev => prev.map(d => d.id === updated.id ? updated : d));
+
+    void runAuthenticatedApi(() => updateDeskApi(updated)).then(saved => {
+      if (saved) {
+        setDesks(prev => prev.map(d => (d.id === saved.id ? saved : d)));
+      }
+    });
   };
 
   const deleteDesk = (id: string) => {
     setDesks(prev => prev.filter(d => d.id !== id));
+    void runAuthenticatedApi(() => deleteDeskApi(id));
   };
 
   // Layout editing methods
@@ -530,6 +702,12 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return d;
     }));
+
+    void runAuthenticatedApi(() => updateDeskPositionApi(deskId, position, rotation)).then(saved => {
+      if (saved) {
+        setDesks(prev => prev.map(d => (d.id === deskId ? saved : d)));
+      }
+    });
   };
 
   const batchUpdateDeskPositions = (updates: { id: string; position: { x: number; y: number }; rotation?: number }[]) => {
@@ -545,6 +723,8 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return d;
     }));
+
+    void runAuthenticatedApi(() => batchUpdateDeskPositionsApi(updates));
   };
 
   const updateFloorElements = (locationId: string, floorId: string, elements: FloorElement[]) => {
@@ -562,6 +742,8 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return loc;
     }));
+
+    void runAuthenticatedApi(() => updateFloorElementsApi(locationId, floorId, elements));
   };
 
   // Calculate User Stats
@@ -675,6 +857,15 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setBookings(INITIAL_BOOKINGS);
     setSelectedDate('2026-10-25');
     setSelectedSlot('full_day');
+
+    void runAuthenticatedApi(() => resetWorkspaceApi()).then(snapshot => {
+      if (snapshot) {
+        setUsers(snapshot.users);
+        setLocations(snapshot.locations);
+        setDesks(snapshot.desks);
+        setBookings(snapshot.bookings);
+      }
+    });
   };
 
   const upsertUser = (user: User) => {
@@ -690,6 +881,25 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return next;
     });
     setCurrentUser(user);
+
+    void runAuthenticatedApi(() =>
+      user.id.startsWith('usr-custom-')
+        ? createUserApi(user)
+        : upsertCurrentUser(user)
+    ).then(saved => {
+      if (saved) {
+        setUsers(prev => {
+          const idx = prev.findIndex(
+            u => u.id === saved.id || u.email.toLowerCase() === saved.email.toLowerCase()
+          );
+          if (idx === -1) return [...prev, saved];
+          const next = [...prev];
+          next[idx] = saved;
+          return next;
+        });
+        setCurrentUser(saved);
+      }
+    });
   };
 
   return (
@@ -737,6 +947,7 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     </DeskBookingContext.Provider>
   );
 };
+
 
 export const useDeskBooking = () => {
   const context = useContext(DeskBookingContext);

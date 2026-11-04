@@ -1,6 +1,8 @@
 using System.Text.Json;
 using BookingApi.Auth;
+using BookingApi.Data;
 using BookingApi.Endpoints;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,9 +22,12 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
+builder.Services.AddDeskinationDatabase(builder.Configuration);
 builder.Services.AddFirebaseAuthentication(builder.Configuration);
 
 var app = builder.Build();
+
+await DeskinationSeeder.EnsureSeededAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
@@ -33,9 +38,13 @@ app.UseCors("DeskUiClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/api/health", (IConfiguration configuration, FirebaseAuthOptions firebaseOptions) =>
+app.MapGet("/api/health", async (
+    IConfiguration configuration,
+    FirebaseAuthOptions firebaseOptions,
+    DeskinationDbContext db) =>
 {
     var connectionString = configuration.GetConnectionString("DefaultConnection");
+    var provider = db.Database.ProviderName ?? "Unknown";
     return Results.Ok(new
     {
         status = "healthy",
@@ -43,6 +52,14 @@ app.MapGet("/api/health", (IConfiguration configuration, FirebaseAuthOptions fir
         environment = app.Environment.EnvironmentName,
         firebaseProjectId = firebaseOptions.ProjectId,
         databaseConfigured = !string.IsNullOrWhiteSpace(connectionString),
+        databaseProvider = provider,
+        counts = new
+        {
+            users = await db.Users.CountAsync(),
+            locations = await db.Locations.CountAsync(),
+            desks = await db.Desks.CountAsync(),
+            bookings = await db.Bookings.CountAsync()
+        },
         timestampUtc = DateTimeOffset.UtcNow
     });
 })
@@ -50,29 +67,11 @@ app.MapGet("/api/health", (IConfiguration configuration, FirebaseAuthOptions fir
 .WithTags("Diagnostics");
 
 app.MapAuthEndpoints();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapUsersEndpoints();
+app.MapLocationsEndpoints();
+app.MapDesksEndpoints();
+app.MapBookingsEndpoints();
+app.MapWorkspaceEndpoints();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
