@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDeskBooking } from '../context/DeskBookingContext';
 import { Location, Desk, SlotType, Booking } from '../types/deskBooking';
+import { getTodayIsoDate, formatIsoDate } from '../utils/dateUtils';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -46,9 +47,9 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
   // Mode: monthly calendar grid vs weekly detailed columns
   const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
 
-  // Baseline navigation reference date: starts at current selectedDate or 2026-10-25
+  // Baseline navigation reference date: starts at current selectedDate or today
   const [viewDate, setViewDate] = useState<Date>(() => {
-    return new Date(selectedDate ? `${selectedDate}T00:00:00` : '2026-10-25T00:00:00');
+    return new Date(selectedDate ? `${selectedDate}T00:00:00` : `${getTodayIsoDate()}T00:00:00`);
   });
 
   // Slot filter for trend calculations (all slots or specific slot)
@@ -163,7 +164,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
     for (let i = startDayIndex - 1; i >= 0; i--) {
       const dayNum = prevMonthLastDay - i;
       const prevDate = new Date(year, month - 1, dayNum);
-      const iso = prevDate.toISOString().split('T')[0];
+      const iso = formatIsoDate(prevDate);
       days.push({
         iso,
         dayNum,
@@ -175,7 +176,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
     // Current month days
     for (let i = 1; i <= daysInMonth; i++) {
       const curDate = new Date(year, month, i);
-      const iso = curDate.toISOString().split('T')[0];
+      const iso = formatIsoDate(curDate);
       days.push({
         iso,
         dayNum: i,
@@ -188,7 +189,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
     const remaining = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       const nextDate = new Date(year, month + 1, i);
-      const iso = nextDate.toISOString().split('T')[0];
+      const iso = formatIsoDate(nextDate);
       days.push({
         iso,
         dayNum: i,
@@ -216,7 +217,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
+      const iso = formatIsoDate(d);
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
       const dayNum = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
       days.push({
@@ -311,9 +312,10 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
   };
 
   const handleToday = () => {
-    const today = new Date('2026-10-25T00:00:00');
+    const todayIso = getTodayIsoDate();
+    const today = new Date(`${todayIso}T00:00:00`);
     setViewDate(today);
-    setSelectedDate('2026-10-25');
+    setSelectedDate(todayIso);
   };
 
   return (
@@ -523,7 +525,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
 
             {monthData.days.map((item, index) => {
               const isSelected = selectedDate === item.iso;
-              const isToday = item.iso === '2026-10-25';
+              const isToday = item.iso === getTodayIsoDate();
               const { metrics } = item;
 
               let tileBg = 'bg-white border-slate-200 hover:border-slate-300';
@@ -643,7 +645,7 @@ export const DeskAvailabilityCalendarView: React.FC<DeskAvailabilityCalendarView
         <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
           {weekData.days.map(col => {
             const isSelected = selectedDate === col.iso;
-            const isToday = col.iso === '2026-10-25';
+            const isToday = col.iso === getTodayIsoDate();
             const { metrics } = col;
 
             return (

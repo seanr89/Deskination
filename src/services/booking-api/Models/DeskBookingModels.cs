@@ -164,3 +164,173 @@ public sealed record Booking(
     string? ReviewedAt = null,
     string? ReviewNotes = null
 );
+
+public sealed record BookedBySlotInfo(
+    string UserName,
+    string Department
+);
+
+public sealed record BookedBySlots(
+    [property: JsonPropertyName("morning"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? Morning = null,
+    [property: JsonPropertyName("afternoon"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? Afternoon = null,
+    [property: JsonPropertyName("full_day"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? FullDay = null
+);
+
+public sealed record SlotAvailability(
+    bool Morning,
+    bool Afternoon,
+    [property: JsonPropertyName("full_day")] bool FullDay,
+    bool? IsDesignatedToOther = null,
+    string? DesignatedUser = null,
+    bool? RequiresApproval = null,
+    BookedBySlots? BookedBy = null
+);
+
+public sealed record MostCommonDeskStat(
+    string DeskCode,
+    string DeskName,
+    int Count
+);
+
+public sealed record UserStats(
+    int TotalBookings,
+    int UpcomingCount,
+    int CompletedCount,
+    int CancelledCount,
+    int PendingApprovalsCount,
+    int CancellationRate,
+    MostCommonDeskStat? MostCommonDesk,
+    string PreferredSlot,
+    int DaysInOfficeThisMonth
+);
+
+public sealed record LocationOccupancyResponse(
+    int Total,
+    int Booked,
+    int Rate
+);
+
+// --- Request & Response DTOs ---
+
+public sealed record UpsertUserRequest(
+    string Name,
+    string Email,
+    string? Department = null,
+    string? JobTitle = null,
+    string? AvatarColor = null,
+    string? Id = null,
+    Role? Role = null
+);
+
+public sealed record CreateUserRequest(
+    string? Id,
+    string Name,
+    string Email,
+    Role? Role = null,
+    string? Department = null,
+    string? JobTitle = null,
+    string? AvatarColor = null
+);
+
+public sealed record CreateLocationRequest(
+    string Name,
+    string City,
+    string Country,
+    string Address,
+    string? Timezone = null,
+    int? AdvanceBookingDaysLimit = null,
+    string? OpeningHours = null,
+    string? Description = null,
+    IReadOnlyList<Floor>? Floors = null,
+    string? Id = null
+);
+
+public sealed record UpdateFloorElementsRequest(
+    IReadOnlyList<FloorElement> Elements
+);
+
+public sealed record CreateDeskRequest(
+    string Code,
+    string Name,
+    string LocationId,
+    string FloorId,
+    string ZoneId,
+    DeskType DeskType,
+    DeskAllocationType? AllocationType,
+    string? DesignatedUserId,
+    string? DesignatedUserName,
+    string? DesignatedDepartment,
+    bool? RequiresApproval,
+    IReadOnlyList<string>? Equipment,
+    DeskStatus? Status,
+    DeskPosition Position,
+    int? Rotation = null,
+    string? Notes = null,
+    string? Id = null
+);
+
+public sealed record UpdateDeskAllocationRequest(
+    DeskAllocationType AllocationType,
+    string? DesignatedUserId = null,
+    string? DesignatedUserName = null,
+    string? DesignatedDepartment = null,
+    bool? RequiresApproval = null
+);
+
+public sealed record UpdateDeskPositionRequest(
+    DeskPosition Position,
+    int? Rotation = null
+);
+
+public sealed record DeskPositionUpdateItem(
+    string Id,
+    DeskPosition Position,
+    int? Rotation = null
+);
+
+public sealed record BatchUpdateDeskPositionsRequest(
+    IReadOnlyList<DeskPositionUpdateItem> Updates
+);
+
+public sealed record CreateBookingRequest(
+    string DeskId,
+    string Date,
+    SlotType Slot,
+    string? Notes = null,
+    string? ApprovalReason = null,
+    bool? IsApprovalRequest = null
+);
+
+public sealed record BookingActionResponse(
+    bool Success,
+    string Message,
+    Booking? Booking = null
+);
+
+public sealed record UpdateBookingRequest(
+    SlotType? Slot = null,
+    string? Notes = null
+);
+
+public sealed record CancelBookingRequest(
+    string? Reason = null
+);
+
+public sealed record ApproveBookingRequest(
+    string? Note = null
+);
+
+public sealed record RejectBookingRequest(
+    string Reason
+);
+
+public sealed record WorkspaceSnapshotResponse(
+    IReadOnlyList<User> Users,
+    IReadOnlyList<Location> Locations,
+    IReadOnlyList<Desk> Desks,
+    IReadOnlyList<Booking> Bookings
+);
+

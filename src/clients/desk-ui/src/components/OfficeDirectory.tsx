@@ -70,7 +70,7 @@ export const OfficeDirectory: React.FC = () => {
       {tab === 'colleagues' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map(user => {
-            // Check if this user has a booking today (2026-10-25)
+            // Check if this user has a booking on the selected date
             const todayBooking = bookings.find(
               b => b.userId === user.id && b.date === selectedDate && b.status !== 'cancelled'
             );

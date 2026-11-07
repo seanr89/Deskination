@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useDeskBooking } from '../context/DeskBookingContext';
 import { useAuth } from '../hooks/useAuth';
 import { User, Role } from '../types/deskBooking';
-import { X, Check, Shield, User as UserIcon, RotateCcw, Plus, KeyRound, LogOut, Copy } from 'lucide-react';
+import { X, Check, Plus, KeyRound, LogOut, Copy } from 'lucide-react';
 
 interface UserSwitcherModalProps {
   isOpen: boolean;
@@ -10,8 +10,8 @@ interface UserSwitcherModalProps {
 }
 
 export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, onClose }) => {
-  const { users, currentUser, setCurrentUser, upsertUser, resetToDefaults } = useDeskBooking();
-  const { firebaseUser, idToken, authMode, signOut, refreshIdToken } = useAuth();
+  const { users, currentUser, setCurrentUser, upsertUser } = useDeskBooking();
+  const { firebaseUser, idToken, signOut, refreshIdToken } = useAuth();
   const [showAddUser, setShowAddUser] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
   const [newName, setNewName] = useState('');
@@ -81,19 +81,11 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
         {/* Content */}
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           {/* Firebase Auth Session Banner */}
-          <div
-            className={`p-3.5 rounded-xl border text-xs space-y-2 ${
-              authMode === 'firebase'
-                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                : 'bg-amber-50/70 border-amber-200 text-amber-950'
-            }`}
-          >
+          <div className="p-3.5 rounded-xl border text-xs space-y-2 bg-emerald-50/70 border-emerald-200 text-emerald-950">
             <div className="flex items-center justify-between">
               <div className="font-semibold flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5" />
-                {authMode === 'firebase'
-                  ? 'Active Firebase Authentication Session'
-                  : 'Demo Workspace Session (Fallback Mode)'}
+                <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
+                Active Firebase Authentication Session
               </div>
               <button
                 type="button"
@@ -103,12 +95,12 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
                 }}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-rose-700 hover:border-rose-200 font-medium"
               >
-                <LogOut className="w-3 h-3" />
+                <LogOut className="w-3 h-3" aria-hidden="true" />
                 Sign Out
               </button>
             </div>
 
-            {firebaseUser ? (
+            {firebaseUser && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-700 pt-1">
                 <div>
                   <span className="text-slate-500">Firebase UID:</span>{' '}
@@ -129,15 +121,11 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
                     onClick={() => void handleCopyToken()}
                     className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 font-medium"
                   >
-                    <Copy className="w-3 h-3" />
+                    <Copy className="w-3 h-3" aria-hidden="true" />
                     {copiedToken ? 'Copied Bearer JWT!' : 'Copy Firebase ID Token'}
                   </button>
                 </div>
               </div>
-            ) : (
-              <p className="text-[11px] text-amber-800">
-                You are currently exploring the platform in Demo Mode. Click <strong>Sign Out</strong> to return to the Firebase Email/Password login screen.
-              </p>
             )}
           </div>
 
@@ -216,26 +204,13 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
                 })}
               </div>
 
-              <div className="pt-2 flex items-center justify-between">
+              <div className="pt-2 flex items-center justify-start">
                 <button
                   onClick={() => setShowAddUser(true)}
                   className="text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 py-1 px-2 rounded hover:bg-indigo-50"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                   Add Custom Employee
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (confirm('Reset all bookings and desk data back to clean factory initial demo state?')) {
-                      resetToDefaults();
-                      onClose();
-                    }
-                  }}
-                  className="text-xs text-slate-500 hover:text-rose-600 flex items-center gap-1.5 py-1 px-2 rounded hover:bg-rose-50 transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reset Demo Data
                 </button>
               </div>
             </>

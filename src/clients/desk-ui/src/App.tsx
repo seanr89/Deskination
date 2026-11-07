@@ -9,11 +9,12 @@ import { AdminConsole } from './components/AdminConsole';
 import { OfficeDirectory } from './components/OfficeDirectory';
 import { UserSwitcherModal } from './components/UserSwitcherModal';
 import { AuthView } from './components/AuthView';
+import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<'book' | 'dashboard' | 'admin' | 'directory'>('book');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const { locations } = useDeskBooking();
+  const { locations, isHydrating, apiError, clearApiError, refreshWorkspace } = useDeskBooking();
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -40,6 +41,49 @@ function MainApp() {
         onNavigate={view => setCurrentView(view)}
         onOpenUserModal={() => setIsUserModalOpen(true)}
       />
+
+      {/* Non-blocking API synchronization & error banners */}
+      {isHydrating && (
+        <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-xs text-indigo-800">
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 font-medium">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" aria-hidden="true" />
+            <span>Synchronizing workspace with Booking API...</span>
+          </div>
+        </div>
+      )}
+
+      {apiError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 text-xs text-rose-900"
+        >
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
+              <span className="font-medium">{apiError}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void refreshWorkspace()}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-rose-200 text-rose-800 hover:bg-rose-100 font-semibold transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                Retry Connection
+              </button>
+              <button
+                type="button"
+                onClick={clearApiError}
+                aria-label="Dismiss API error"
+                className="p-1 rounded-md text-rose-600 hover:text-rose-900 hover:bg-rose-100 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Viewport Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

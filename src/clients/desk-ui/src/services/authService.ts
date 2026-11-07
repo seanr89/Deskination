@@ -117,7 +117,7 @@ export function mapFirebaseAuthError(err: unknown): AuthErrorDetails {
     case 'auth/not-configured':
       return {
         code,
-        message: 'Firebase Authentication is not configured. Provide VITE_FIREBASE_* variables or use Demo Mode.',
+        message: 'Firebase Authentication is not configured. Provide VITE_FIREBASE_* environment variables or configure runtime settings.',
         originalError: err,
       };
     default:

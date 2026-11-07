@@ -27,19 +27,16 @@ import { useDeskBooking } from './DeskBookingContext';
 import type {
   AuthContextValue,
   AuthErrorDetails,
-  AuthMode,
   FirebaseClientConfig,
   SignInCredentials,
   SignUpCredentials,
 } from '../types/auth';
 import type { User as WorkspaceUser } from '../types/deskBooking';
 
-const DEMO_SESSION_KEY = 'flexdesk_demo_session_v1';
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { users, currentUser, setCurrentUser, upsertUser } = useDeskBooking();
+  const { users, currentUser, upsertUser } = useDeskBooking();
   const usersRef = useRef<WorkspaceUser[]>(users);
   usersRef.current = users;
 
@@ -49,22 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [tokenResult, setTokenResult] = useState<IdTokenResult | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<AuthMode>(() => {
-    try {
-      const savedDemo = sessionStorage.getItem(DEMO_SESSION_KEY);
-      if (savedDemo === 'true') return 'demo';
-    } catch {
-      // ignore
-    }
-    return hasFirebaseConfig() ? 'firebase' : 'demo';
-  });
-  const [isDemoAuthenticated, setIsDemoAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(DEMO_SESSION_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [isLoading, setIsLoading] = useState<boolean>(() => hasFirebaseConfig());
   const [error, setError] = useState<AuthErrorDetails | null>(null);
   const [configVersion, setConfigVersion] = useState(0);
@@ -89,13 +70,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIdToken(tokenRes?.token || null);
 
       if (fbUser) {
-        setAuthMode('firebase');
-        setIsDemoAuthenticated(false);
-        try {
-          sessionStorage.removeItem(DEMO_SESSION_KEY);
-        } catch {
-          // ignore
-        }
         const mapped = mapFirebaseUserToWorkspaceUser(fbUser, usersRef.current, tokenRes);
         upsertUser(mapped);
       }
@@ -106,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, [configVersion]);
+  }, [configVersion, upsertUser]);
 
   const signIn = useCallback(
     async (credentials: SignInCredentials): Promise<WorkspaceUser> => {
@@ -118,13 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFirebaseUser(fbUser);
         setTokenResult(tokenRes);
         setIdToken(tokenRes.token);
-        setAuthMode('firebase');
-        setIsDemoAuthenticated(false);
-        try {
-          sessionStorage.removeItem(DEMO_SESSION_KEY);
-        } catch {
-          // ignore
-        }
         upsertUser(mapped);
         return mapped;
       } catch (err) {
@@ -156,13 +123,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFirebaseUser(fbUser);
         setTokenResult(tokenRes);
         setIdToken(tokenRes.token);
-        setAuthMode('firebase');
-        setIsDemoAuthenticated(false);
-        try {
-          sessionStorage.removeItem(DEMO_SESSION_KEY);
-        } catch {
-          // ignore
-        }
         upsertUser(mapped);
         return mapped;
       } catch (err) {
@@ -178,13 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = useCallback(async (): Promise<void> => {
     setError(null);
-    try {
-      sessionStorage.removeItem(DEMO_SESSION_KEY);
-    } catch {
-      // ignore
-    }
-    setIsDemoAuthenticated(false);
-
     if (isFirebaseConfigured) {
       await signOutFirebaseUser();
     }
@@ -228,30 +181,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return token;
   }, []);
 
-  const enterDemoMode = useCallback(
-    (persona?: WorkspaceUser) => {
-      setError(null);
-      if (persona) {
-        setCurrentUser(persona);
-      }
-      setAuthMode('demo');
-      setIsDemoAuthenticated(true);
-      try {
-        sessionStorage.setItem(DEMO_SESSION_KEY, 'true');
-      } catch {
-        // ignore
-      }
-    },
-    [setCurrentUser]
-  );
-
   const saveRuntimeConfig = useCallback((config: FirebaseClientConfig): boolean => {
     setError(null);
     void setRuntimeFirebaseConfig(config).then(ok => {
       setIsFirebaseConfigured(ok);
-      if (ok) {
-        setAuthMode('firebase');
-      }
       setConfigVersion(v => v + 1);
     });
     return true;
@@ -269,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
   }, []);
 
-  const isAuthenticated = Boolean(firebaseUser) || isDemoAuthenticated;
+  const isAuthenticated = Boolean(firebaseUser);
   const workspaceUser = isAuthenticated ? currentUser : null;
 
   return (
@@ -282,7 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isAuthenticated,
         isFirebaseConfigured,
-        authMode: firebaseUser ? 'firebase' : authMode,
+        authMode: 'firebase',
         error,
         signIn,
         signUp,
@@ -290,7 +223,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendPasswordReset,
         updatePassword,
         refreshIdToken,
-        enterDemoMode,
         saveRuntimeConfig,
         clearRuntimeConfig,
         clearError,

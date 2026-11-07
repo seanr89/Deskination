@@ -17,14 +17,120 @@ Authorization: Bearer {{firebase_id_token}}
 
 ###
 
+GET {{booking_api_HostAddress}}/api/users
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
 GET {{booking_api_HostAddress}}/api/users/me
 Accept: application/json
 Authorization: Bearer {{firebase_id_token}}
 
 ###
 
-GET {{booking_api_HostAddress}}/api/auth/admin-check
+PUT {{booking_api_HostAddress}}/api/users/me
+Content-Type: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+{
+  "name": "Sarah Chen",
+  "email": "sarah.chen@acme-corp.internal",
+  "department": "Frontend Engineering",
+  "jobTitle": "Senior Staff Engineer",
+  "avatarColor": "bg-emerald-600"
+}
+
+###
+
+GET {{booking_api_HostAddress}}/api/users/usr-sarah/stats?referenceDate=2026-10-25
 Accept: application/json
 Authorization: Bearer {{firebase_id_token}}
 
 ###
+
+GET {{booking_api_HostAddress}}/api/locations
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+GET {{booking_api_HostAddress}}/api/locations/loc-london/occupancy?date=2026-10-25
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+GET {{booking_api_HostAddress}}/api/locations/loc-london/colleagues?date=2026-10-25
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+GET {{booking_api_HostAddress}}/api/desks?locationId=loc-london&floorId=flr-ldn-4
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+GET {{booking_api_HostAddress}}/api/desks/desk-ldn-420/availability?date=2026-10-25
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+PATCH {{booking_api_HostAddress}}/api/desks/positions
+Content-Type: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+{
+  "updates": [
+    { "id": "desk-ldn-401", "position": { "x": 14, "y": 22 }, "rotation": 0 },
+    { "id": "desk-ldn-402", "position": { "x": 26, "y": 22 }, "rotation": 90 }
+  ]
+}
+
+###
+
+GET {{booking_api_HostAddress}}/api/bookings?locationId=loc-london&date=2026-10-25
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+POST {{booking_api_HostAddress}}/api/bookings
+Content-Type: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+{
+  "deskId": "desk-ldn-401",
+  "date": "2026-10-26",
+  "slot": "full_day",
+  "notes": "Sprint planning and component architecture",
+  "isApprovalRequest": false
+}
+
+###
+
+POST {{booking_api_HostAddress}}/api/bookings/bkg-today-2/check-in
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+
+POST {{booking_api_HostAddress}}/api/bookings/bkg-pending-1/approve
+Content-Type: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+{
+  "note": "Approved by Elena Rostova"
+}
+
+###
+
+POST {{booking_api_HostAddress}}/api/workspace/reset
+Accept: application/json
+Authorization: Bearer {{firebase_id_token}}
+
+###
+

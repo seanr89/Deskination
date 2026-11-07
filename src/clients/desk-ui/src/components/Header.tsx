@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenUserModal }) => {
   const { currentUser } = useDeskBooking();
-  const { authMode, signOut } = useAuth();
+  const { signOut } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -86,19 +86,11 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
           {/* Zone 3: 1 Primary Action & Profile Switcher */}
           <div className="flex items-center gap-2.5 shrink-0">
             <span
-              className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${
-                authMode === 'firebase'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
-              }`}
-              title={
-                authMode === 'firebase'
-                  ? 'Authenticated via Firebase Auth'
-                  : 'Running in Demo Workspace mode'
-              }
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border bg-emerald-50 text-emerald-800 border-emerald-200"
+              title="Authenticated via Firebase Auth"
             >
-              <KeyRound className="w-3 h-3" />
-              {authMode === 'firebase' ? 'Firebase Auth' : 'Demo Mode'}
+              <KeyRound className="w-3 h-3" aria-hidden="true" />
+              Firebase Auth
             </span>
 
             <button
@@ -107,7 +99,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
               title="Click to inspect session details, switch persona, or manage authentication"
             >
               <div className={`w-7 h-7 rounded-full ${currentUser.avatarColor} text-white flex items-center justify-center text-xs font-semibold shrink-0`}>
-                {currentUser.name.split(' ').map(n => n[0]).join('')}
+                {(currentUser.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="hidden lg:block">
                 <div className="text-xs font-semibold text-slate-900 leading-tight">
