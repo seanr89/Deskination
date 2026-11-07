@@ -10,7 +10,7 @@ import {
   FloorElement,
   DeskAllocationType
 } from '../types/deskBooking';
-import { INITIAL_USERS, INITIAL_LOCATIONS, INITIAL_DESKS, INITIAL_BOOKINGS } from '../mock/initialData';
+import { getTodayIsoDate, getCurrentYearMonth } from '../utils/dateUtils';
 import { getCurrentIdToken, subscribeToAuthChanges } from '../services/authService';
 import {
   fetchUsers,
@@ -87,71 +87,37 @@ interface DeskBookingContextType {
   getLocationOccupancy: (locationId: string, date: string) => { total: number; booked: number; rate: number };
   getColleaguesInOfficeToday: (locationId: string, date: string) => Booking[];
   
+  // Hydration & API status
+  isHydrating: boolean;
+  apiError: string | null;
+  clearApiError: () => void;
+  refreshWorkspace: () => Promise<void>;
+
   // Reset
   resetToDefaults: () => void;
 }
 
-const STORAGE_KEY_USERS = 'flexdesk_users_v1';
-const STORAGE_KEY_LOCATIONS = 'flexdesk_locations_v1';
-const STORAGE_KEY_DESKS = 'flexdesk_desks_v1';
-const STORAGE_KEY_BOOKINGS = 'flexdesk_bookings_v1';
-const STORAGE_KEY_CURRENT_USER = 'flexdesk_current_user_v1';
+const EMPTY_USER: User = {
+  id: '',
+  name: 'Workspace Member',
+  email: '',
+  role: 'employee',
+  department: 'General Operations',
+  jobTitle: 'Team Member',
+  avatarColor: 'bg-slate-600',
+};
 
 const DeskBookingContext = createContext<DeskBookingContextType | undefined>(undefined);
 
-async function runAuthenticatedApi<T>(action: () => Promise<T>): Promise<T | null> {
-  try {
-    const token = await getCurrentIdToken();
-    if (!token) return null;
-    return await action();
-  } catch {
-    // Graceful fallback to local state when booking-api is offline or in Demo Mode
-    return null;
-  }
-}
-
 export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. Users
-  const [users, setUsers] = useState<User[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_USERS);
-      return stored ? JSON.parse(stored) : INITIAL_USERS;
-    } catch {
-      return INITIAL_USERS;
-    }
-  });
-
-  const [currentUser, setCurrentUser] = useState<User>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const match = users.find(u => u.id === parsed.id);
-        return match || users[0];
-      }
-    } catch {
-      // fallback
-    }
-    return users[0];
-  });
+  const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
 
   // 2. Locations
-  const [locations, setLocations] = useState<Location[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_LOCATIONS);
-      return stored ? JSON.parse(stored) : INITIAL_LOCATIONS;
-    } catch {
-      return INITIAL_LOCATIONS;
-    }
-  });
-
-  const [currentLocationId, setCurrentLocationId] = useState<string>(() => {
-    return locations[0]?.id || 'loc-london';
-  });
-
-  const [currentFloorId, setCurrentFloorId] = useState<string>(() => {
-    return locations[0]?.floors[0]?.id || 'flr-ldn-4';
-  });
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [currentLocationId, setCurrentLocationId] = useState<string>('');
+  const [currentFloorId, setCurrentFloorId] = useState<string>('');
 
   // Keep floor ID synchronized when location changes
   useEffect(() => {
@@ -165,35 +131,41 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [currentLocationId, locations, currentFloorId]);
 
   // 3. Desks
-  const [desks, setDesks] = useState<Desk[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_DESKS);
-      return stored ? JSON.parse(stored) : INITIAL_DESKS;
-    } catch {
-      return INITIAL_DESKS;
-    }
-  });
+  const [desks, setDesks] = useState<Desk[]>([]);
 
   // 4. Bookings
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_BOOKINGS);
-      return stored ? JSON.parse(stored) : INITIAL_BOOKINGS;
-    } catch {
-      return INITIAL_BOOKINGS;
-    }
-  });
+  const [bookings, setBookings] = useState<Booking[]>([]);
 
-  // 5. Active selection date & slot (today's baseline 2026-10-25)
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-25');
+  // 5. Active selection date & slot
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<SlotType>('full_day');
+
+  // 6. Hydration & API status
+  const [isHydrating, setIsHydrating] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const clearApiError = useCallback(() => {
+    setApiError(null);
+  }, []);
+
+  const runAuthenticatedApi = useCallback(async <T,>(action: () => Promise<T>): Promise<T | null> => {
+    try {
+      const token = await getCurrentIdToken();
+      if (!token) return null;
+      const result = await action();
+      setApiError(null);
+      return result;
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Failed to communicate with booking-api.');
+      return null;
+    }
+  }, []);
 
   // Hydrate workspace state from booking-api whenever a Firebase session becomes active
   const hydrateFromBackend = useCallback(async () => {
+    setIsHydrating(true);
+    setApiError(null);
     try {
-      const token = await getCurrentIdToken();
-      if (!token) return;
-
       const [remoteUsers, remoteLocations, remoteDesks, remoteBookings] = await Promise.all([
         fetchUsers(),
         fetchLocations(),
@@ -201,12 +173,27 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
         fetchBookings(),
       ]);
 
-      if (remoteUsers.length > 0) setUsers(remoteUsers);
-      if (remoteLocations.length > 0) setLocations(remoteLocations);
-      if (remoteDesks.length > 0) setDesks(remoteDesks);
-      if (remoteBookings.length > 0) setBookings(remoteBookings);
-    } catch {
-      // Keep localStorage state if booking-api is unreachable
+      setUsers(remoteUsers);
+      setLocations(remoteLocations);
+      setDesks(remoteDesks);
+      setBookings(remoteBookings);
+
+      if (remoteLocations.length > 0) {
+        setCurrentLocationId(prevLocId => {
+          const validLoc = remoteLocations.find(l => l.id === prevLocId);
+          return validLoc ? validLoc.id : remoteLocations[0].id;
+        });
+        setCurrentFloorId(prevFloorId => {
+          const validFloor = remoteLocations.some(l => l.floors.some(f => f.id === prevFloorId));
+          return validFloor ? prevFloorId : remoteLocations[0].floors[0]?.id || '';
+        });
+      }
+    } catch (err) {
+      setApiError(
+        err instanceof Error ? err.message : 'Unable to load workspace data from booking-api.'
+      );
+    } finally {
+      setIsHydrating(false);
     }
   }, []);
 
@@ -220,27 +207,6 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       unsubscribe();
     };
   }, [hydrateFromBackend]);
-
-  // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_LOCATIONS, JSON.stringify(locations));
-  }, [locations]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_DESKS, JSON.stringify(desks));
-  }, [desks]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(bookings));
-  }, [bookings]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(currentUser));
-  }, [currentUser]);
 
   // Desk slot availability calculator
   const getDeskAvailability = (deskId: string, date: string): SlotAvailability => {
@@ -748,9 +714,11 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Calculate User Stats
   const getUserStats = (userId: string): UserStats => {
+    const todayIso = getTodayIsoDate();
+    const currentYearMonth = getCurrentYearMonth();
     const userBookings = bookings.filter(b => b.userId === userId);
-    const completed = userBookings.filter(b => b.status === 'checked_in' || (b.status === 'confirmed' && b.date < '2026-10-25'));
-    const upcoming = userBookings.filter(b => b.status === 'confirmed' && b.date >= '2026-10-25');
+    const completed = userBookings.filter(b => b.status === 'checked_in' || (b.status === 'confirmed' && b.date < todayIso));
+    const upcoming = userBookings.filter(b => b.status === 'confirmed' && b.date >= todayIso);
     const cancelled = userBookings.filter(b => b.status === 'cancelled');
     const pendingApprovals = userBookings.filter(b => b.status === 'pending_approval');
 
@@ -794,10 +762,10 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
     else if (morningCount > fullDayCount && morningCount > afternoonCount) preferredSlot = 'morning';
     else if (afternoonCount > fullDayCount && afternoonCount > morningCount) preferredSlot = 'afternoon';
 
-    // Days in office in October 2026
-    const octDays = new Set(
+    // Days in office this month
+    const monthDays = new Set(
       userBookings
-        .filter(b => b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'pending_approval' && b.date.startsWith('2026-10'))
+        .filter(b => b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'pending_approval' && b.date.startsWith(currentYearMonth))
         .map(b => b.date)
     );
 
@@ -810,7 +778,7 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
       cancellationRate,
       mostCommonDesk,
       preferredSlot,
-      daysInOfficeThisMonth: octDays.size
+      daysInOfficeThisMonth: monthDays.size
     };
   };
 
@@ -843,19 +811,7 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Reset to original seed data
   const resetToDefaults = () => {
-    localStorage.removeItem(STORAGE_KEY_USERS);
-    localStorage.removeItem(STORAGE_KEY_LOCATIONS);
-    localStorage.removeItem(STORAGE_KEY_DESKS);
-    localStorage.removeItem(STORAGE_KEY_BOOKINGS);
-    localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
-    setUsers(INITIAL_USERS);
-    setCurrentUser(INITIAL_USERS[0]);
-    setLocations(INITIAL_LOCATIONS);
-    setCurrentLocationId(INITIAL_LOCATIONS[0].id);
-    setCurrentFloorId(INITIAL_LOCATIONS[0].floors[0].id);
-    setDesks(INITIAL_DESKS);
-    setBookings(INITIAL_BOOKINGS);
-    setSelectedDate('2026-10-25');
+    setSelectedDate(getTodayIsoDate());
     setSelectedSlot('full_day');
 
     void runAuthenticatedApi(() => resetWorkspaceApi()).then(snapshot => {
@@ -864,11 +820,15 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setLocations(snapshot.locations);
         setDesks(snapshot.desks);
         setBookings(snapshot.bookings);
+        if (snapshot.locations.length > 0) {
+          setCurrentLocationId(snapshot.locations[0].id);
+          setCurrentFloorId(snapshot.locations[0].floors[0]?.id || '');
+        }
       }
     });
   };
 
-  const upsertUser = (user: User) => {
+  const upsertUser = useCallback((user: User) => {
     setUsers(prev => {
       const idx = prev.findIndex(
         u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase()
@@ -900,7 +860,7 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCurrentUser(saved);
       }
     });
-  };
+  }, [runAuthenticatedApi]);
 
   return (
     <DeskBookingContext.Provider
@@ -940,6 +900,10 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
         getDeskAvailability,
         getLocationOccupancy,
         getColleaguesInOfficeToday,
+        isHydrating,
+        apiError,
+        clearApiError,
+        refreshWorkspace: hydrateFromBackend,
         resetToDefaults
       }}
     >

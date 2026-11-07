@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Location, Desk, Booking } from '../types/deskBooking';
+import { getTodayIsoDate, formatIsoDate } from '../utils/dateUtils';
 import { 
   X, 
   Download, 
@@ -35,8 +36,14 @@ export const DailyOccupancyReportModal: React.FC<DailyOccupancyReportModalProps>
   const [selectedLocationId, setSelectedLocationId] = useState<string>(
     initialLocationId && initialLocationId !== 'all' ? initialLocationId : (locations[0]?.id || 'all')
   );
-  const [startDate, setStartDate] = useState<string>('2026-10-01');
-  const [endDate, setEndDate] = useState<string>('2026-10-31');
+  const [startDate, setStartDate] = useState<string>(() => {
+    const today = new Date(`${getTodayIsoDate()}T00:00:00`);
+    return formatIsoDate(new Date(today.getFullYear(), today.getMonth(), 1));
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    const today = new Date(`${getTodayIsoDate()}T00:00:00`);
+    return formatIsoDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  });
   const [reportFormat, setReportFormat] = useState<'daily_summary' | 'detailed_attendance'>('daily_summary');
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -53,7 +60,7 @@ export const DailyOccupancyReportModal: React.FC<DailyOccupancyReportModalProps>
     // Guard against excessive range (> 120 days)
     let count = 0;
     while (current <= end && count < 120) {
-      dates.push(current.toISOString().split('T')[0]);
+      dates.push(formatIsoDate(current));
       current.setDate(current.getDate() + 1);
       count++;
     }
@@ -163,18 +170,29 @@ export const DailyOccupancyReportModal: React.FC<DailyOccupancyReportModalProps>
 
   // Presets handler
   const handleApplyPreset = (preset: 'this_month' | 'past_7' | 'past_30' | 'next_14') => {
+    const todayIso = getTodayIsoDate();
+    const today = new Date(`${todayIso}T00:00:00`);
+
     if (preset === 'this_month') {
-      setStartDate('2026-10-01');
-      setEndDate('2026-10-31');
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      setStartDate(formatIsoDate(firstDay));
+      setEndDate(formatIsoDate(lastDay));
     } else if (preset === 'past_7') {
-      setStartDate('2026-10-18');
-      setEndDate('2026-10-25');
+      const start = new Date(today);
+      start.setDate(today.getDate() - 7);
+      setStartDate(formatIsoDate(start));
+      setEndDate(todayIso);
     } else if (preset === 'past_30') {
-      setStartDate('2026-09-25');
-      setEndDate('2026-10-25');
+      const start = new Date(today);
+      start.setDate(today.getDate() - 30);
+      setStartDate(formatIsoDate(start));
+      setEndDate(todayIso);
     } else if (preset === 'next_14') {
-      setStartDate('2026-10-25');
-      setEndDate('2026-11-08');
+      const end = new Date(today);
+      end.setDate(today.getDate() + 14);
+      setStartDate(todayIso);
+      setEndDate(formatIsoDate(end));
     }
   };
 
@@ -395,7 +413,7 @@ export const DailyOccupancyReportModal: React.FC<DailyOccupancyReportModalProps>
                   onClick={() => handleApplyPreset('this_month')}
                   className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                 >
-                  This Month (Oct)
+                  This Month
                 </button>
                 <button
                   type="button"

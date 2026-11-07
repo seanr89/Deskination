@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDeskBooking } from '../context/DeskBookingContext';
 import { Desk, SlotType, DeskType, Floor, DeskAllocationType } from '../types/deskBooking';
+import { getTodayIsoDate, formatIsoDate } from '../utils/dateUtils';
 import { InteractiveFloorPlan } from './InteractiveFloorPlan';
 import { EditableFloorPlan } from './EditableFloorPlan';
 import { DeskAvailabilityCalendarView } from './DeskAvailabilityCalendarView';
@@ -61,13 +62,13 @@ export const BookDeskView: React.FC = () => {
   // Advance days range generator (based on location's advanceBookingDaysLimit, e.g. 30 days)
   const advanceDates = useMemo(() => {
     const dates = [];
-    const base = new Date('2026-10-25T00:00:00'); // Baseline today
+    const base = new Date(`${getTodayIsoDate()}T00:00:00`); // Baseline today
     const limit = currentLocation?.advanceBookingDaysLimit || 30;
 
     for (let i = 0; i < limit; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
+      const iso = formatIsoDate(d);
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
       const dayNum = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -257,7 +258,7 @@ export const BookDeskView: React.FC = () => {
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
             {advanceDates.map(item => {
               const isSelected = selectedDate === item.iso;
-              const isToday = item.iso === '2026-10-25';
+              const isToday = item.iso === getTodayIsoDate();
               const dayOccupancy = getLocationOccupancy(currentLocationId, item.iso);
 
               return (
@@ -317,7 +318,7 @@ export const BookDeskView: React.FC = () => {
               <input
                 type="date"
                 value={selectedDate}
-                min="2026-10-25"
+                min={getTodayIsoDate()}
                 onChange={e => setSelectedDate(e.target.value)}
                 className="text-xs px-2 py-1 border border-slate-300 rounded font-mono"
               />

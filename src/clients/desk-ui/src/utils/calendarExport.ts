@@ -2,7 +2,7 @@ import { Booking } from '../types/deskBooking';
 
 export function downloadCalendarEvent(booking: Booking) {
   // Convert date and slot into start and end times
-  // 2026-10-25 format
+  // YYYY-MM-DD format
   const dateClean = booking.date.replace(/-/g, '');
   
   let startHour = '083000';

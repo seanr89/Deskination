@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useDeskBooking } from '../context/DeskBookingContext';
 import { resolveFirebaseConfig } from '../config/firebase';
 import {
-  Shield,
   Lock,
   Mail,
   Eye,
@@ -11,10 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   KeyRound,
-  Building2,
   Sliders,
-  Sparkles,
-  ArrowRight,
   UserPlus,
   LogIn,
 } from 'lucide-react';
@@ -26,14 +21,12 @@ export const AuthView: React.FC = () => {
     signIn,
     signUp,
     sendPasswordReset,
-    enterDemoMode,
     isFirebaseConfigured,
     saveRuntimeConfig,
     clearRuntimeConfig,
     error,
     clearError,
   } = useAuth();
-  const { users } = useDeskBooking();
 
   const [activeTab, setActiveTab] = useState<AuthScreenTab>('signin');
   const [email, setEmail] = useState('');
@@ -632,7 +625,7 @@ export const AuthView: React.FC = () => {
           )}
         </div>
 
-        {/* Secondary Card: Demo Mode & Firebase Status / Configuration */}
+        {/* Secondary Card: Firebase Status / Configuration */}
         <div className="bg-white py-5 px-6 shadow-xs rounded-2xl border border-slate-200/90 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -644,7 +637,7 @@ export const AuthView: React.FC = () => {
               <span className="text-xs font-semibold text-slate-800">
                 {isFirebaseConfigured
                   ? 'Firebase Auth SDK Connected'
-                  : 'Firebase Env Not Set (Demo Fallback Ready)'}
+                  : 'Firebase Configuration Required'}
               </span>
             </div>
             <button
@@ -660,8 +653,7 @@ export const AuthView: React.FC = () => {
           {!isFirebaseConfigured && (
             <p className="text-xs text-slate-600 leading-relaxed">
               No <code className="px-1 py-0.5 bg-slate-100 rounded text-[11px]">VITE_FIREBASE_*</code>{' '}
-              credentials were detected in your environment. You can configure Firebase connection
-              settings or launch the interactive Demo Workspace below.
+              credentials were detected in your environment. Configure your Firebase project settings below to sign in.
             </p>
           )}
 
@@ -822,66 +814,6 @@ export const AuthView: React.FC = () => {
               )}
             </form>
           )}
-
-          {/* Demo Workspace Personas Quick-Launch */}
-          <div className="pt-3 border-t border-slate-100">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
-              Quick Demo Personas (Or Match by Email on Firebase Sign-In)
-            </div>
-            <div className="space-y-2">
-              {users.slice(0, 3).map(u => (
-                <div
-                  key={u.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 hover:border-slate-300 bg-slate-50/60 text-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-7 h-7 rounded-full ${u.avatarColor} text-white flex items-center justify-center font-semibold text-[11px] shrink-0`}
-                    >
-                      {u.name
-                        .split(' ')
-                        .map(n => n[0])
-                        .join('')}
-                    </div>
-                    <div className="truncate">
-                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                        {u.name}
-                        {u.role === 'admin' && (
-                          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">
-                            Admin
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate">{u.email}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail(u.email);
-                        setFullName(u.name);
-                        setDepartment(u.department);
-                        setJobTitle(u.jobTitle);
-                      }}
-                      className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md bg-white"
-                      title="Fill email into form"
-                    >
-                      Fill Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => enterDemoMode(u)}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md flex items-center gap-1"
-                    >
-                      Demo
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

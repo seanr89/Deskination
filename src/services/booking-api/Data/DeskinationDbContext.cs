@@ -271,6 +271,9 @@ public static class DatabaseConfigurationExtensions
             configuration["Database:Provider"],
             "InMemory",
             StringComparison.OrdinalIgnoreCase);
+        var inMemoryDatabaseName = !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"])
+            ? configuration["Database:InMemoryName"]!
+            : "DeskinationWorkspaceDb";
 
         var usePostgres = !forceInMemory &&
                           !string.IsNullOrWhiteSpace(connectionString) &&
@@ -284,7 +287,7 @@ public static class DatabaseConfigurationExtensions
             }
             else
             {
-                options.UseInMemoryDatabase("DeskinationWorkspaceDb")
+                options.UseInMemoryDatabase(inMemoryDatabaseName)
                        .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
             }
         });

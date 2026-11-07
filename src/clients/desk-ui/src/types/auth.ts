@@ -13,7 +13,7 @@ export interface FirebaseClientConfig {
   emulatorUrl?: string;
 }
 
-export type AuthMode = 'firebase' | 'demo';
+export type AuthMode = 'firebase';
 
 export interface SignInCredentials {
   email: string;
@@ -79,8 +79,7 @@ export interface AuthContextValue {
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshIdToken: (forceRefresh?: boolean) => Promise<string | null>;
 
-  // Demo & runtime config helpers
-  enterDemoMode: (persona?: WorkspaceUser) => void;
+  // Runtime config helpers
   saveRuntimeConfig: (config: FirebaseClientConfig) => boolean;
   clearRuntimeConfig: () => void;
   clearError: () => void;

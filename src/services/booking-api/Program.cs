@@ -75,3 +75,6 @@ app.MapWorkspaceEndpoints();
 
 app.Run();
 
+public partial class Program;
+
+
