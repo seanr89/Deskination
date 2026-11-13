@@ -3,9 +3,11 @@ import { useDeskBooking } from '../context/DeskBookingContext';
 import { useAuth } from '../hooks/useAuth';
 import { Building2, User, Shield, LogOut, KeyRound } from 'lucide-react';
 
+export type WorkspaceView = 'book' | 'dashboard' | 'admin' | 'directory' | 'profile';
+
 interface HeaderProps {
-  currentView: 'book' | 'dashboard' | 'admin' | 'directory';
-  onNavigate: (view: 'book' | 'dashboard' | 'admin' | 'directory') => void;
+  currentView: WorkspaceView;
+  onNavigate: (view: WorkspaceView) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
@@ -92,7 +94,18 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
               Firebase Auth
             </span>
 
-            <div className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-slate-200 bg-slate-50/50 text-left">
+            <button
+              type="button"
+              onClick={() => onNavigate('profile')}
+              aria-label="View user profile"
+              aria-current={currentView === 'profile' ? 'page' : undefined}
+              className={`flex items-center gap-2.5 py-1.5 px-3 rounded-lg border transition-colors text-left ${
+                currentView === 'profile'
+                  ? 'border-indigo-600 bg-indigo-50/70 ring-1 ring-indigo-600'
+                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-100/70'
+              }`}
+              title="View your profile details and role access"
+            >
               <div className={`w-7 h-7 rounded-full ${currentUser.avatarColor} text-white flex items-center justify-center text-xs font-semibold shrink-0`}>
                 {(currentUser.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
@@ -104,7 +117,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                   {currentUser.role === 'admin' ? 'Office Admin' : currentUser.department}
                 </div>
               </div>
-            </div>
+            </button>
 
             <button
               type="button"
@@ -153,6 +166,16 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
           >
             <Shield className="w-3 h-3" />
             Office Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('profile')}
+            className={`px-3 py-1.5 rounded-md whitespace-nowrap font-medium flex items-center gap-1 ${
+              currentView === 'profile' ? 'bg-slate-900 text-white' : 'text-slate-600 bg-slate-100'
+            }`}
+          >
+            <User className="w-3 h-3" />
+            My Profile
           </button>
         </div>
 
