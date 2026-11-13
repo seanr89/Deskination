@@ -6,7 +6,8 @@ Deskination (branded **FlexDesk** in the UI) is a lightweight internal office de
 
 ```text
 .
-├── docker-compose.yml              # Local PostgreSQL + Booking API stack
+├── Makefile                          # Unified build, test, Docker Compose, and dev workflow commands
+├── docker-compose.yml                # Local PostgreSQL, Booking API, and optional dev UI stack
 └── src/
     ├── services/
     │   ├── booking-api/            # .NET 10 ASP.NET Core Minimal Web API
@@ -36,7 +37,26 @@ Deskination (branded **FlexDesk** in the UI) is a lightweight internal office de
 
 ## Quick Start (Local Development)
 
-### 1. Start the Booking API (and PostgreSQL)
+### Using `make` (Recommended)
+Run `make help` from the repository root to view all available targets:
+- **Start full stack in dev mode** (PostgreSQL + Booking API in Docker Compose, UI dev server on `http://localhost:3000`):
+  ```bash
+  make dev
+  ```
+- **Start full stack entirely inside Docker Compose**:
+  ```bash
+  make dev-docker
+  ```
+- **Build both backend and frontend**:
+  ```bash
+  make build
+  ```
+- **Manage Docker Compose stack**: `make up`, `make down`, `make logs`, `make docker-reset`
+- **Run all tests & checks**: `make lint`, `make test` (`test-api`, `test-ui`, `test-e2e`)
+
+### Manual Commands
+
+#### 1. Start the Booking API (and PostgreSQL)
 Using Docker Compose from the repository root:
 ```bash
 docker compose up --build

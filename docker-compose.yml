@@ -41,9 +41,30 @@ services:
     networks:
       - deskination-network
 
+  desk-ui:
+    image: node:24-alpine
+    container_name: deskination-desk-ui
+    profiles:
+      - dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "${DESK_UI_PORT:-3000}:3000"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    volumes:
+      - ./src/clients/desk-ui:/app
+      - desk_ui_node_modules:/app/node_modules
+    depends_on:
+      - booking-api
+    networks:
+      - deskination-network
+
 volumes:
   postgres_data:
     name: deskination_postgres_data
+  desk_ui_node_modules:
+    name: deskination_desk_ui_node_modules
 
 networks:
   deskination-network:
