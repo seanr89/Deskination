@@ -201,7 +201,7 @@ export const AuthView: React.FC = () => {
               FlexDesk
             </span>
             <span className="block text-xs text-slate-500">
-              Deskination Hybrid Workplace Platform
+              Internal Office Desk Booking
             </span>
           </div>
         </div>

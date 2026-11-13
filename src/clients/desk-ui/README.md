@@ -1,20 +1,29 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Deskination UI Client (`desk-ui`)
 
-# Run and deploy your AI Studio app
+Web frontend for Deskination (branded **FlexDesk** in the UI), a lightweight internal office desk booking tool built for a single company. It connects to the `.NET 10` `booking-api` backend and uses Firebase Authentication (`firebase/auth`) for employee and office admin sign-in.
 
-This contains everything you need to run your app locally.
+## Prerequisites
 
-View your app in AI Studio: https://ai.studio/apps/15de3a9e-79fb-4be6-a2cd-10f683f4c6fe
+- Node.js (v22+)
+- Running `booking-api` instance (defaults to `http://localhost:8080`)
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+## Local Development
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```bash
+   npm install
+   ```
+2. Configure environment variables (copy `.env.example` to `.env` if present, or set):
+   - `VITE_API_BASE_URL=http://localhost:8080`
+   - `VITE_FIREBASE_*` settings for project `officewho-53cec` (or configure them in the UI runtime Firebase Config panel)
+3. Start the Vite dev server on `http://localhost:3000`:
+   ```bash
+   npm run dev
+   ```
+
+## Scripts
+
+- `npm run lint` — TypeScript type checking (`tsc --noEmit`)
+- `npm run build` — Production Vite build
+- `npm test` — Vitest unit tests
+- `npm run test:e2e` — Playwright end-to-end tests

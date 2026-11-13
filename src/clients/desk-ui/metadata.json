@@ -1,6 +1,6 @@
 {
-  "name": "FlexDesk - Hybrid Workplace Desk Booking",
-  "description": "Enterprise desk booking, office floorplan management, and hybrid attendance dashboard for employees and workplace operations managers.",
+  "name": "FlexDesk - Internal Office Desk Booking",
+  "description": "Lightweight internal desk booking, office floorplan management, and attendance tracking tool for a single company.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
