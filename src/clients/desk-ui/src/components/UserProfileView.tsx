@@ -32,7 +32,13 @@ function getInitials(name: string): string {
     .join('') || 'U';
 }
 
-export const UserProfileView: React.FC = () => {
+interface UserProfileViewProps {
+  onOpenCookiePreferences?: () => void;
+}
+
+export const UserProfileView: React.FC<UserProfileViewProps> = ({
+  onOpenCookiePreferences,
+}) => {
   const { currentUser, locations, currentLocationId, getUserStats } = useDeskBooking();
   const { firebaseUser, signOut } = useAuth();
 
@@ -315,7 +321,16 @@ export const UserProfileView: React.FC = () => {
               </div>
             </dl>
 
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              {onOpenCookiePreferences && (
+                <button
+                  type="button"
+                  onClick={onOpenCookiePreferences}
+                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  Manage Cookie &amp; Privacy Preferences
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void signOut()}

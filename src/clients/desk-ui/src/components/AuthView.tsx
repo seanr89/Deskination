@@ -189,7 +189,7 @@ export const AuthView: React.FC = () => {
   return (
     <div
       ref={formContainerRef}
-      className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 px-4 sm:px-6 lg:px-8 text-slate-900"
+      className="min-h-screen bg-slate-50 flex flex-col justify-center pt-8 pb-36 px-4 sm:px-6 lg:px-8 text-slate-900"
     >
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex items-center justify-center gap-2.5">
