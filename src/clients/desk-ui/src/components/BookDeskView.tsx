@@ -26,7 +26,8 @@ import {
   Sliders,
   Lock,
   Shield,
-  UserCheck
+  UserCheck,
+  RefreshCw
 } from 'lucide-react';
 
 export const BookDeskView: React.FC = () => {
@@ -44,7 +45,9 @@ export const BookDeskView: React.FC = () => {
     getDeskAvailability,
     getLocationOccupancy,
     currentUser,
-    bookings
+    bookings,
+    isHydrating,
+    refreshWorkspace
   } = useDeskBooking();
 
   const [viewMode, setViewMode] = useState<'map' | 'grid' | 'calendar'>('map');
@@ -57,7 +60,9 @@ export const BookDeskView: React.FC = () => {
 
   // Active location and floor
   const currentLocation = locations.find(l => l.id === currentLocationId) || locations[0];
-  const currentFloor = currentLocation.floors.find(f => f.id === currentFloorId) || currentLocation.floors[0];
+  const currentFloor = currentLocation?.floors?.find(f => f.id === currentFloorId) || currentLocation?.floors?.[0];
+  const activeLocationId = currentLocation?.id || currentLocationId;
+  const activeFloorId = currentFloor?.id || currentFloorId;
 
   // Advance days range generator (based on location's advanceBookingDaysLimit, e.g. 30 days)
   const advanceDates = useMemo(() => {
@@ -78,7 +83,10 @@ export const BookDeskView: React.FC = () => {
   }, [currentLocation]);
 
   // Desks filtered for this floor and search filters
-  const floorDesks = desks.filter(d => d.locationId === currentLocationId && d.floorId === currentFloorId);
+  const floorDesks = useMemo(
+    () => desks.filter(d => d.locationId === activeLocationId && d.floorId === activeFloorId),
+    [desks, activeLocationId, activeFloorId]
+  );
 
   const filteredDesks = useMemo(() => {
     return floorDesks.filter(desk => {
@@ -121,7 +129,43 @@ export const BookDeskView: React.FC = () => {
   }, [floorDesks, selectedTypeFilter, selectedAllocationFilter, searchQuery, onlyAvailableFilter, selectedSlot, selectedDate, getDeskAvailability]);
 
   // Live occupancy stats
-  const occupancy = getLocationOccupancy(currentLocationId, selectedDate);
+  const occupancy = getLocationOccupancy(activeLocationId, selectedDate);
+
+  if (!currentLocation) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center shadow-xs space-y-3">
+        <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mx-auto">
+          <Building2 className="w-5 h-5" aria-hidden="true" />
+        </div>
+        {isHydrating ? (
+          <>
+            <progress aria-label="Loading office locations" className="sr-only" />
+            <h2 className="text-sm font-semibold text-slate-900">Loading Office Locations...</h2>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Synchronizing office locations, floorplans, and desk inventory from the Booking API.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-sm font-semibold text-slate-900">No Office Locations Available</h2>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              No office locations could be loaded from the workspace service. Verify that the Booking API is running or refresh the workspace.
+            </p>
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => void refreshWorkspace()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                Retry Loading Locations
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -146,7 +190,7 @@ export const BookDeskView: React.FC = () => {
                   key={loc.id}
                   onClick={() => setCurrentLocationId(loc.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentLocationId === loc.id
+                    activeLocationId === loc.id
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
@@ -162,12 +206,12 @@ export const BookDeskView: React.FC = () => {
             <div className="space-y-1">
               <label className="block text-[11px] font-semibold text-slate-500">Floor Level</label>
               <div className="flex items-center gap-1.5">
-                {currentLocation.floors.map(fl => (
+                {(currentLocation.floors ?? []).map(fl => (
                   <button
                     key={fl.id}
                     onClick={() => setCurrentFloorId(fl.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-                      currentFloorId === fl.id
+                      activeFloorId === fl.id
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-semibold'
                         : 'border-slate-200 text-slate-600 hover:border-slate-300 bg-white'
                     }`}
@@ -259,7 +303,7 @@ export const BookDeskView: React.FC = () => {
             {advanceDates.map(item => {
               const isSelected = selectedDate === item.iso;
               const isToday = item.iso === getTodayIsoDate();
-              const dayOccupancy = getLocationOccupancy(currentLocationId, item.iso);
+              const dayOccupancy = getLocationOccupancy(activeLocationId, item.iso);
 
               return (
                 <button
@@ -510,7 +554,15 @@ export const BookDeskView: React.FC = () => {
       </div>
 
       {/* Main Viewport Content: Editable Floor Plan OR Calendar View OR Interactive Floor Plan OR Desk Grid */}
-      {isEditingLayout ? (
+      {!currentFloor ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
+          <Layers className="w-6 h-6 text-slate-400 mx-auto" aria-hidden="true" />
+          <h3 className="text-sm font-semibold text-slate-900">No Floors Configured</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            {currentLocation.name} does not have any floor layouts configured yet.
+          </p>
+        </div>
+      ) : isEditingLayout ? (
         <EditableFloorPlan
           floor={currentFloor}
           desks={floorDesks}
