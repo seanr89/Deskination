@@ -194,11 +194,11 @@ export const AuthView: React.FC = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex items-center justify-center gap-2.5">
           <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-base shadow-xs">
-            FD
+            DN
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight text-slate-900">
-              FlexDesk
+              Deskination
             </span>
             <span className="block text-xs text-slate-500">
               Internal Office Desk Booking

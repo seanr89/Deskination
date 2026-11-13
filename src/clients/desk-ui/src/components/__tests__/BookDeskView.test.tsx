@@ -12,7 +12,7 @@ vi.mock('../../context/DeskBookingContext', () => ({
 const mockUser: User = {
   id: 'usr-1',
   name: 'Alex Morgan',
-  email: 'alex@flexdesk.io',
+  email: 'alex@deskination.io',
   role: 'employee',
   department: 'Engineering',
   jobTitle: 'Software Engineer',

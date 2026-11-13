@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('FlexDesk UI — Mock Removal & Firebase Auth Gate E2E', () => {
+test.describe('Deskination UI — Mock Removal & Firebase Auth Gate E2E', () => {
   test('renders Firebase Auth gate without Demo Mode personas or localStorage mock data', async ({
     page,
   }) => {
     await page.goto('/');
 
     // 1. Verify AuthView renders for unauthenticated sessions with internal single-company copy
-    await expect(page).toHaveTitle('FlexDesk - Internal Office Desk Booking');
+    await expect(page).toHaveTitle('Deskination - Internal Office Desk Booking');
     await expect(page.getByText('Internal Office Desk Booking')).toBeVisible();
     await expect(page.getByText(/enterprise/i)).toHaveCount(0);
     await expect(
@@ -27,6 +27,11 @@ test.describe('FlexDesk UI — Mock Removal & Firebase Auth Gate E2E', () => {
 
     // 3. Verify no domain mock data is seeded in localStorage on boot
     const localStorageKeys = await page.evaluate(() => Object.keys(localStorage));
+    expect(localStorageKeys).not.toContain('deskination_users_v1');
+    expect(localStorageKeys).not.toContain('deskination_locations_v1');
+    expect(localStorageKeys).not.toContain('deskination_desks_v1');
+    expect(localStorageKeys).not.toContain('deskination_bookings_v1');
+    expect(localStorageKeys).not.toContain('deskination_current_user_v1');
     expect(localStorageKeys).not.toContain('flexdesk_users_v1');
     expect(localStorageKeys).not.toContain('flexdesk_locations_v1');
     expect(localStorageKeys).not.toContain('flexdesk_desks_v1');

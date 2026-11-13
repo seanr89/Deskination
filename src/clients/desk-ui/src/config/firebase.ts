@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp, deleteApp, type FirebaseApp } from 'fir
 import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
 import type { FirebaseClientConfig } from '../types/auth';
 
-const RUNTIME_FIREBASE_CONFIG_KEY = 'flexdesk_firebase_config_v1';
+const RUNTIME_FIREBASE_CONFIG_KEY = 'deskination_firebase_config_v1';
 
 let firebaseAppInstance: FirebaseApp | null = null;
 let firebaseAuthInstance: Auth | null = null;

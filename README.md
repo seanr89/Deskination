@@ -1,6 +1,6 @@
 # Deskination
 
-Deskination (branded **FlexDesk** in the UI) is a lightweight internal office desk booking tool designed for a single company and straightforward internal integration.
+Deskination is a lightweight internal office desk booking tool designed for a single company and straightforward internal integration.
 
 ## Source App Structure
 

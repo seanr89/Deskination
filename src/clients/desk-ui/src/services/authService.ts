@@ -23,7 +23,7 @@ import type {
 } from '../types/auth';
 import type { Role, User as WorkspaceUser } from '../types/deskBooking';
 
-const PROFILE_METADATA_STORAGE_KEY = 'flexdesk_auth_profile_meta_v1';
+const PROFILE_METADATA_STORAGE_KEY = 'deskination_auth_profile_meta_v1';
 
 const AVATAR_PALETTE = [
   'bg-emerald-600',

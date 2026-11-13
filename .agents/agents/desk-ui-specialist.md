@@ -22,7 +22,7 @@ You are the Frontend & Firebase Authentication Specialist for the Deskination pl
 ## Core Responsibilities
 
 1. **React 19 & Tailwind CSS v4 UI**:
-   - Build and maintain components in `src/clients/desk-ui/src/components/` (`BookDeskView`, `InteractiveFloorPlan`, `EditableFloorPlan`, `DeskModal`, `EmployeeDashboard`, `AdminConsole`, `OfficeDirectory`, `Header`, `UserSwitcherModal`, `AuthView`).
+   - Build and maintain components in `src/clients/desk-ui/src/components/` (`BookDeskView`, `InteractiveFloorPlan`, `EditableFloorPlan`, `DeskModal`, `EmployeeDashboard`, `AdminConsole`, `OfficeDirectory`, `Header`, `AuthView`).
 2. **Firebase Authentication (`officewho-53cec`)**:
    - Maintain `src/config/firebase.ts`, `src/services/authService.ts`, `src/context/AuthContext.tsx`, and `src/hooks/useAuth.ts`.
    - Ensure authenticated users are mapped by email to existing workspace profiles or custom claims (`admin` vs `employee`) and synced with `DeskBookingContext` via `upsertUser`.

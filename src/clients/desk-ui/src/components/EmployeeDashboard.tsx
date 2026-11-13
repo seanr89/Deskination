@@ -55,7 +55,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
   // Preferred office location state (persisted per user)
   const [preferredLocId, setPreferredLocId] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem(`flexdesk_pref_loc_${currentUser.id}`);
+      const saved = localStorage.getItem(`deskination_pref_loc_${currentUser.id}`);
       if (saved && locations.some(l => l.id === saved)) {
         return saved;
       }
@@ -209,7 +209,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
     setPreferredLocId(locId);
     setCurrentLocationId(locId);
     try {
-      localStorage.setItem(`flexdesk_pref_loc_${currentUser.id}`, locId);
+      localStorage.setItem(`deskination_pref_loc_${currentUser.id}`, locId);
     } catch {
       // ignore
     }

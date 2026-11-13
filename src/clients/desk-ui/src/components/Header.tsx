@@ -1,15 +1,14 @@
 import React from 'react';
 import { useDeskBooking } from '../context/DeskBookingContext';
 import { useAuth } from '../hooks/useAuth';
-import { Building2, User, Shield, ChevronDown, RefreshCw, LogOut, KeyRound } from 'lucide-react';
+import { Building2, User, Shield, LogOut, KeyRound } from 'lucide-react';
 
 interface HeaderProps {
   currentView: 'book' | 'dashboard' | 'admin' | 'directory';
   onNavigate: (view: 'book' | 'dashboard' | 'admin' | 'directory') => void;
-  onOpenUserModal: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenUserModal }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
   const { currentUser } = useDeskBooking();
   const { signOut } = useAuth();
 
@@ -25,11 +24,11 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
               className="flex items-center gap-2 text-left group focus:outline-none"
             >
               <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm">
-                FD
+                DN
               </div>
               <div>
                 <span className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">
-                  FlexDesk
+                  Deskination
                 </span>
                 <span className="hidden sm:inline-block ml-2 text-xs font-normal text-slate-500">
                   Hybrid Workspace
@@ -83,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action & Profile Switcher */}
+          {/* Zone 3: 1 Primary Action & Profile */}
           <div className="flex items-center gap-2.5 shrink-0">
             <span
               className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border bg-emerald-50 text-emerald-800 border-emerald-200"
@@ -93,11 +92,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
               Firebase Auth
             </span>
 
-            <button
-              onClick={onOpenUserModal}
-              className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left"
-              title="Click to inspect session details, switch persona, or manage authentication"
-            >
+            <div className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-slate-200 bg-slate-50/50 text-left">
               <div className={`w-7 h-7 rounded-full ${currentUser.avatarColor} text-white flex items-center justify-center text-xs font-semibold shrink-0`}>
                 {(currentUser.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
@@ -109,8 +104,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onOpenU
                   {currentUser.role === 'admin' ? 'Office Admin' : currentUser.department}
                 </div>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
+            </div>
 
             <button
               type="button"

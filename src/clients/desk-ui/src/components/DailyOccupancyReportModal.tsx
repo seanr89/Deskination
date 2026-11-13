@@ -300,14 +300,14 @@ export const DailyOccupancyReportModal: React.FC<DailyOccupancyReportModalProps>
     link.setAttribute('href', encodedUri);
     link.setAttribute(
       'download', 
-      `flexdesk-${reportFormat === 'daily_summary' ? 'daily-occupancy' : 'attendance-roster'}-${locSlug}-${startDate}-to-${endDate}.csv`
+      `deskination-${reportFormat === 'daily_summary' ? 'daily-occupancy' : 'attendance-roster'}-${locSlug}-${startDate}-to-${endDate}.csv`
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     setIsExporting(false);
-    setSuccessToast(`Report exported successfully! Downloaded: flexdesk-${locSlug}-${startDate}-to-${endDate}.csv`);
+    setSuccessToast(`Report exported successfully! Downloaded: deskination-${locSlug}-${startDate}-to-${endDate}.csv`);
     setTimeout(() => setSuccessToast(null), 4000);
   };
 

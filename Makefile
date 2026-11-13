@@ -14,7 +14,7 @@ UI_DIR := src/clients/desk-ui
         lint test test-api test-ui test-e2e clean
 
 help: ## Show available Makefile targets
-	@echo "Deskination (FlexDesk) — Available Make Targets"
+	@echo "Deskination — Available Make Targets"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_-]+:.*##/ { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
@@ -59,7 +59,7 @@ dev: ## Run PostgreSQL + Booking API via Docker Compose and desk-ui locally in d
 	trap cleanup EXIT INT TERM; \
 	$(COMPOSE) up -d --build postgres booking-api; \
 	echo "Booking API available at http://localhost:$${BOOKING_API_PORT:-8080}"; \
-	echo "Starting FlexDesk UI dev server at http://localhost:3000..."; \
+	echo "Starting Deskination UI dev server at http://localhost:3000..."; \
 	cd $(UI_DIR) && ([ -d node_modules ] || npm ci) && npm run dev
 
 dev-docker: ## Run the full stack (postgres, booking-api, desk-ui) inside Docker Compose

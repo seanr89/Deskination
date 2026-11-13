@@ -16,7 +16,7 @@ This skill guides development of the Deskination frontend (`src/clients/desk-ui`
    - `<DeskBookingProvider>` (`src/context/DeskBookingContext.tsx`) wraps `<AuthProvider>` (`src/context/AuthContext.tsx`), which wraps `<MainApp />`.
    - `AuthProvider` listens to Firebase Authentication state changes via `subscribeToAuthChanges` (`src/services/authService.ts`) and synchronizes the authenticated user into `DeskBookingContext` via `upsertUser(mappedUser)`.
 2. **Firebase Authentication Layer**:
-   - **Config**: `src/config/firebase.ts` resolves `VITE_FIREBASE_*` variables from `.env` (project `officewho-53cec`) or runtime `localStorage` fallback (`flexdesk_firebase_config_v1`).
+   - **Config**: `src/config/firebase.ts` resolves `VITE_FIREBASE_*` variables from `.env` (project `officewho-53cec`) or runtime `localStorage` fallback (`deskination_firebase_config_v1`).
    - **Service**: `src/services/authService.ts` provides `signInWithEmail`, `signUpWithEmail`, `signOutFirebaseUser`, `sendPasswordReset`, `updateCurrentUserPassword`, `getCurrentIdToken`, and `mapFirebaseUserToWorkspaceUser`.
    - **Role Mapping**: `mapFirebaseUserToWorkspaceUser` matches the Firebase user's email (case-insensitive) against existing workspace profiles (`INITIAL_USERS` / `users`), inspects custom claims (`tokenResult.claims.role` / `admin`), and defaults new sign-ups to `'employee'`.
 3. **Authenticated Backend Calls**:

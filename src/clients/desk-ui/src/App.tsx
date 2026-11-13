@@ -7,13 +7,11 @@ import { BookDeskView } from './components/BookDeskView';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { AdminConsole } from './components/AdminConsole';
 import { OfficeDirectory } from './components/OfficeDirectory';
-import { UserSwitcherModal } from './components/UserSwitcherModal';
 import { AuthView } from './components/AuthView';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<'book' | 'dashboard' | 'admin' | 'directory'>('book');
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const { locations, isHydrating, apiError, clearApiError, refreshWorkspace } = useDeskBooking();
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -21,7 +19,7 @@ function MainApp() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3 text-slate-600">
         <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm animate-pulse">
-          FD
+          DN
         </div>
         <p className="text-xs font-medium">Verifying Firebase Authentication session...</p>
       </div>
@@ -39,7 +37,6 @@ function MainApp() {
       <Header
         currentView={currentView}
         onNavigate={view => setCurrentView(view)}
-        onOpenUserModal={() => setIsUserModalOpen(true)}
       />
 
       {/* Non-blocking API synchronization & error banners */}
@@ -97,7 +94,7 @@ function MainApp() {
       <footer className="border-t border-slate-200 bg-white py-6 mt-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">FlexDesk</span>
+            <span className="font-semibold text-slate-700">Deskination</span>
             <span>· Internal Office Desk Booking</span>
           </div>
 
@@ -107,21 +104,9 @@ function MainApp() {
                 {l.city} Hub
               </span>
             ))}
-            <button
-              onClick={() => setIsUserModalOpen(true)}
-              className="text-indigo-600 hover:text-indigo-800 font-medium"
-            >
-              Switch User Persona
-            </button>
           </div>
         </div>
       </footer>
-
-      {/* User Switcher Modal */}
-      <UserSwitcherModal
-        isOpen={isUserModalOpen}
-        onClose={() => setIsUserModalOpen(false)}
-      />
 
     </div>
   );

@@ -14,8 +14,7 @@
 - `Desk.rotation` is constrained to `0 | 90 | 180 | 270` degrees.
 - When updating multiple desks in `EditableFloorPlan.tsx`, use `batchUpdateDeskPositions` in `DeskBookingContext` to commit position changes atomically.
 
-## 3. Authentication & Demo Mode Fallback
+## 3. Authentication
 
 - When `isAuthenticated` is `false`, `MainApp` renders `src/components/AuthView.tsx`.
-- `AuthView` supports three tabs (`'signin'`, `'signup'`, `'reset'`), runtime Firebase config overrides, and one-click Demo Persona launch (`enterDemoMode(user)`).
-- In `Header.tsx` and `UserSwitcherModal.tsx`, check `authMode` (`'firebase' | 'demo'`) from `useAuth()` to distinguish live Firebase sessions from Demo Mode sessions.
+- `AuthView` supports three tabs (`'signin'`, `'signup'`, `'reset'`) and runtime Firebase config overrides.

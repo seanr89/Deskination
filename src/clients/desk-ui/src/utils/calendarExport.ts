@@ -21,17 +21,17 @@ export function downloadCalendarEvent(booking: Booking) {
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
   const summary = `Office Desk Booking: ${booking.deskCode} (${booking.locationName})`;
-  const description = `FlexDesk Reservation\\nLocation: ${booking.locationName} - ${booking.floorName}\\nDesk: ${booking.deskName} (${booking.deskCode})\\nSlot: ${booking.slot.replace('_', ' ').toUpperCase()}\\nReserved for: ${booking.userName} (${booking.userDepartment})`;
+  const description = `Deskination Reservation\\nLocation: ${booking.locationName} - ${booking.floorName}\\nDesk: ${booking.deskName} (${booking.deskCode})\\nSlot: ${booking.slot.replace('_', ' ').toUpperCase()}\\nReserved for: ${booking.userName} (${booking.userDepartment})`;
   const location = `${booking.locationName}, ${booking.floorName}`;
 
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//FlexDesk Workplace//Desk Booking//EN',
+    'PRODID:-//Deskination Workplace//Desk Booking//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
-    `UID:booking-${booking.id}@flexdesk.internal`,
+    `UID:booking-${booking.id}@deskination.internal`,
     `DTSTAMP:${now}`,
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
@@ -47,7 +47,7 @@ export function downloadCalendarEvent(booking: Booking) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', `flexdesk-${booking.deskCode}-${booking.date}.ics`);
+  link.setAttribute('download', `deskination-${booking.deskCode}-${booking.date}.ics`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

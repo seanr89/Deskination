@@ -35,7 +35,6 @@ import { DailyOccupancyReportModal } from './DailyOccupancyReportModal';
 export const AdminConsole: React.FC = () => {
   const {
     currentUser,
-    setCurrentUser,
     users,
     locations,
     addLocation,
@@ -195,7 +194,7 @@ export const AdminConsole: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `flexdesk-master-bookings-${Date.now()}.csv`);
+    link.setAttribute('download', `deskination-master-bookings-${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -394,30 +393,6 @@ export const AdminConsole: React.FC = () => {
             Manage global office locations, desk policies, review reservation requests, and supervise employee attendance.
           </p>
         </div>
-
-        {currentUser.role !== 'admin' && (
-          <div className="flex items-center gap-2 bg-indigo-800/80 p-2.5 rounded-lg border border-indigo-700 text-xs">
-            <span>Viewing as {currentUser.name}.</span>
-            <button
-              onClick={() => {
-                const adminUser = users.find(u => u.role === 'admin') || {
-                  id: 'usr-admin-elena',
-                  name: 'Elena Rostova',
-                  email: 'elena.rostova@acme-corp.internal',
-                  role: 'admin',
-                  department: 'Workplace Operations',
-                  jobTitle: 'Director of Workplace & Facilities',
-                  avatarColor: 'bg-blue-700'
-                };
-                setCurrentUser(adminUser);
-                showToast('success', 'Switched to Workplace Admin persona (Elena Rostova)');
-              }}
-              className="px-2.5 py-1 bg-white text-indigo-900 font-semibold rounded hover:bg-indigo-50 transition-colors"
-            >
-              Switch to Elena Rostova (Admin)
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Navigation Sub-Tabs */}

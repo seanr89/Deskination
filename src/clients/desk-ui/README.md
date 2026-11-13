@@ -1,6 +1,6 @@
 # Deskination UI Client (`desk-ui`)
 
-Web frontend for Deskination (branded **FlexDesk** in the UI), a lightweight internal office desk booking tool built for a single company. It connects to the `.NET 10` `booking-api` backend and uses Firebase Authentication (`firebase/auth`) for employee and office admin sign-in.
+Web frontend for **Deskination**, a lightweight internal office desk booking tool built for a single company. It connects to the `.NET 10` `booking-api` backend and uses Firebase Authentication (`firebase/auth`) for employee and office admin sign-in.
 
 ## Prerequisites
 

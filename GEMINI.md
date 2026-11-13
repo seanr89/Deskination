@@ -1,6 +1,6 @@
 # Deskination — Workspace Rules & Architecture (`GEMINI.md`)
 
-Deskination (branded **FlexDesk** in the UI) is a lightweight, internal office desk booking tool built for a single company and straightforward internal integration.
+Deskination is a lightweight, internal office desk booking tool built for a single company and straightforward internal integration.
 
 ## Repository Layout
 

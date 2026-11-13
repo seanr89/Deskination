@@ -218,7 +218,7 @@ describe('apiClient', () => {
       const payload = {
         id: 'usr-1',
         name: 'Alex Morgan',
-        email: 'alex.morgan@flexdesk.io',
+        email: 'alex.morgan@deskination.io',
         department: 'Workplace Ops',
         jobTitle: 'Director',
         role: 'admin' as const,
