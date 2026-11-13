@@ -1120,7 +1120,7 @@ export const AdminConsole: React.FC = () => {
           {(() => {
             const loc = locations.find(l => l.id === layoutLocId) || locations[0];
             const floor = loc?.floors.find(f => f.id === layoutFloorId) || loc?.floors[0];
-            const floorDesks = desks.filter(d => d.locationId === loc.id && d.floorId === floor?.id);
+            const floorDesks = desks.filter(d => d.locationId === loc?.id && d.floorId === floor?.id);
 
             if (!floor) return null;
 

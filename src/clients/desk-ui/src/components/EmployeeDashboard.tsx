@@ -441,7 +441,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
                       <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
                         <span className="text-indigo-700 font-medium">{recommendedToday.reason}</span>
                         <span>·</span>
-                        <span>{preferredLoc.name.split('(')[0]}</span>
+                        <span>{(preferredLoc?.name ?? 'Office').split('(')[0]}</span>
                         <span>·</span>
                         <span className="capitalize">{recommendedToday.desk.deskType.replace('_', ' ')}</span>
                       </div>
@@ -542,7 +542,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
                       <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
                         <span className="text-indigo-700 font-medium">{recommendedTomorrow.reason}</span>
                         <span>·</span>
-                        <span>{preferredLoc.name.split('(')[0]}</span>
+                        <span>{(preferredLoc?.name ?? 'Office').split('(')[0]}</span>
                         <span>·</span>
                         <span className="capitalize">{recommendedTomorrow.desk.deskType.replace('_', ' ')}</span>
                       </div>
@@ -627,7 +627,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
             {occupancy.rate}% <span className="text-xs font-normal text-slate-500">capacity</span>
           </div>
           <div className="mt-1 text-xs text-slate-500 truncate">
-            {currentLoc.name.split('(')[0]} · {occupancy.booked} occupied
+            {(currentLoc?.name ?? 'No location').split('(')[0]} · {occupancy.booked} occupied
           </div>
         </div>
 
@@ -948,7 +948,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
                 <span>Office Status &amp; Capacity</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                {currentLoc.name} · Live status today
+                {currentLoc?.name ?? 'No Office Selected'} · Live status today
               </p>
             </div>
 
@@ -974,7 +974,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
             <div className="text-xs text-slate-600 space-y-1 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Operating Hours:</span>
-                <span className="font-medium text-slate-800">{currentLoc.openingHours}</span>
+                <span className="font-medium text-slate-800">{currentLoc?.openingHours ?? '—'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Acoustic Status:</span>
