@@ -51,12 +51,25 @@ export const BookDeskView: React.FC = () => {
   } = useDeskBooking();
 
   const [viewMode, setViewMode] = useState<'map' | 'grid' | 'calendar'>('map');
+  const [previousViewMode, setPreviousViewMode] = useState<'map' | 'grid'>('map');
   const [isEditingLayout, setIsEditingLayout] = useState<boolean>(false);
   const [selectedDesk, setSelectedDesk] = useState<Desk | null>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [selectedAllocationFilter, setSelectedAllocationFilter] = useState<'all' | 'unreserved' | 'designated' | 'requires_approval'>('all');
   const [onlyAvailableFilter, setOnlyAvailableFilter] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const toggleCalendarView = () => {
+    if (viewMode === 'calendar') {
+      setViewMode(previousViewMode);
+    } else {
+      if (viewMode === 'map' || viewMode === 'grid') {
+        setPreviousViewMode(viewMode);
+      }
+      setViewMode('calendar');
+    }
+    setIsEditingLayout(false);
+  };
 
   // Active location and floor
   const currentLocation = locations.find(l => l.id === currentLocationId) || locations[0];
@@ -347,14 +360,21 @@ export const BookDeskView: React.FC = () => {
           
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                setViewMode('calendar');
-                setIsEditingLayout(false);
-              }}
-              className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md flex items-center gap-1.5 transition-colors"
+              type="button"
+              onClick={toggleCalendarView}
+              aria-pressed={viewMode === 'calendar'}
+              className={`px-2.5 py-1 text-xs font-semibold border rounded-md flex items-center gap-1.5 transition-colors ${
+                viewMode === 'calendar'
+                  ? 'text-white bg-indigo-600 hover:bg-indigo-700 border-indigo-600'
+                  : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
+              }`}
             >
-              <CalendarIcon className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Open Monthly / Weekly Calendar Trends</span>
+              <CalendarIcon className={`w-3.5 h-3.5 ${viewMode === 'calendar' ? 'text-white' : 'text-indigo-600'}`} />
+              <span>
+                {viewMode === 'calendar'
+                  ? 'Close Monthly / Weekly Calendar Trends'
+                  : 'Open Monthly / Weekly Calendar Trends'}
+              </span>
             </button>
 
             <div className="flex items-center gap-1.5">
@@ -526,10 +546,9 @@ export const BookDeskView: React.FC = () => {
               Grid List ({filteredDesks.length})
             </button>
             <button
-              onClick={() => {
-                setViewMode('calendar');
-                setIsEditingLayout(false);
-              }}
+              type="button"
+              onClick={toggleCalendarView}
+              aria-pressed={viewMode === 'calendar' && !isEditingLayout}
               className={`flex items-center gap-1.5 px-3 py-1 rounded transition-all font-medium whitespace-nowrap ${
                 viewMode === 'calendar' && !isEditingLayout ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
               }`}

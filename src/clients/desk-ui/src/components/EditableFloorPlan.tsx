@@ -196,7 +196,7 @@ export const EditableFloorPlan: React.FC<EditableFloorPlanProps> = ({
 
     if (placementMode === 'desk') {
       const nextNum = localDesks.length + 1;
-      const prefix = floor.name.includes('Floor 22') ? 'NY-22' : floor.name.includes('Berlin') ? 'BER-' : 'LDN-4';
+      const prefix = floor.locationId === 'loc-belfast' ? 'BFS-' : floor.locationId === 'loc-dubai' ? 'DXB-' : 'LDN-4';
       const code = `${prefix}${String(nextNum).padStart(2, '0')}`;
       
       const newDesk: Desk = {
@@ -614,7 +614,7 @@ export const EditableFloorPlan: React.FC<EditableFloorPlanProps> = ({
               >
                 {/* Desk code */}
                 <span className="font-bold tracking-tight px-1 truncate max-w-full">
-                  {desk.code.replace('LDN-', '').replace('NY-', '').replace('BER-', '')}
+                  {desk.code.replace('LDN-', '').replace('BFS-', '').replace('DXB-', '')}
                 </span>
 
                 {/* Desk Type mini tag */}

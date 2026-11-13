@@ -161,43 +161,43 @@ public static class DeskinationSeeder
             ]
         ),
         new(
-            Id: "loc-ny",
-            Name: "New York Hub (Hudson Yards)",
-            City: "New York",
-            Country: "United States",
-            Address: "55 Hudson Yards, Floor 22, New York, NY 10001",
-            Timezone: "America/New_York",
+            Id: "loc-belfast",
+            Name: "Belfast Hub (Titanic Quarter)",
+            City: "Belfast",
+            Country: "United Kingdom",
+            Address: "1 Olympic Way, Titanic Quarter, Belfast BT3 9EP",
+            Timezone: "Europe/London",
             AdvanceBookingDaysLimit: 21,
             OpeningHours: "08:00 - 19:30 (Mon - Fri)",
-            Description: "Contemporary high-rise loft designed for cross-functional sales and technical client demonstrations.",
+            Description: "Contemporary waterside workspace designed for cross-functional engineering and client collaborations.",
             Floors:
             [
                 new(
-                    Id: "flr-ny-22",
-                    LocationId: "loc-ny",
-                    Name: "Floor 22 - Open Loft & Client Suite",
-                    Level: 22,
+                    Id: "flr-bfs-2",
+                    LocationId: "loc-belfast",
+                    Name: "Floor 2 - Harbour Loft & Client Suite",
+                    Level: 2,
                     Zones:
                     [
                         new(
-                            Id: "zn-ny-east",
-                            FloorId: "flr-ny-22",
-                            Name: "East Wing: Sales & Solutions",
-                            Code: "ZONE-NY-A",
+                            Id: "zn-bfs-east",
+                            FloorId: "flr-bfs-2",
+                            Name: "East Wing: Solutions & Delivery",
+                            Code: "ZONE-BFS-A",
                             Description: "High energy open benching with call privacy booths."
                         ),
                         new(
-                            Id: "zn-ny-west",
-                            FloorId: "flr-ny-22",
+                            Id: "zn-bfs-west",
+                            FloorId: "flr-bfs-2",
                             Name: "West Wing: Quiet Engineering Lab",
-                            Code: "ZONE-NY-B",
+                            Code: "ZONE-BFS-B",
                             Description: "Dual monitor workstations with ultra-wide curved screens."
                         )
                     ],
                     Elements:
                     [
                         new(
-                            Id: "elem-ny-client-rm",
+                            Id: "elem-bfs-client-rm",
                             Name: "Client Presentation Suite",
                             Type: FloorElementType.Room,
                             X: 75,
@@ -211,30 +211,30 @@ public static class DeskinationSeeder
             ]
         ),
         new(
-            Id: "loc-berlin",
-            Name: "Berlin Tech Studio (Mitte)",
-            City: "Berlin",
-            Country: "Germany",
-            Address: "Torstraße 120, 10119 Berlin",
-            Timezone: "Europe/Berlin",
+            Id: "loc-dubai",
+            Name: "Dubai Hub (DIFC)",
+            City: "Dubai",
+            Country: "United Arab Emirates",
+            Address: "Gate Village 8, DIFC, Dubai, UAE",
+            Timezone: "Asia/Dubai",
             AdvanceBookingDaysLimit: 30,
-            OpeningHours: "08:00 - 20:00 (Mon - Fri)",
-            Description: "Industrial tech studio in vibrant Mitte with ergonomic sit-stand setups and acoustic felt focus nooks.",
+            OpeningHours: "08:00 - 20:00 (Sun - Thu)",
+            Description: "Modern regional studio in DIFC with ergonomic sit-stand setups and acoustic focus nooks.",
             Floors:
             [
                 new(
-                    Id: "flr-ber-1",
-                    LocationId: "loc-berlin",
-                    Name: "Ground Floor & Garden Studio",
+                    Id: "flr-dxb-1",
+                    LocationId: "loc-dubai",
+                    Name: "Level 1 - DIFC Studio",
                     Level: 1,
                     Zones:
                     [
                         new(
-                            Id: "zn-ber-courtyard",
-                            FloorId: "flr-ber-1",
-                            Name: "Courtyard View Studio",
-                            Code: "ZONE-BER-A",
-                            Description: "Direct view onto green courtyard with oak standing workstations."
+                            Id: "zn-dxb-atrium",
+                            FloorId: "flr-dxb-1",
+                            Name: "Atrium View Studio",
+                            Code: "ZONE-DXB-A",
+                            Description: "Bright atrium-facing studio with oak standing workstations."
                         )
                     ],
                     Elements: []
@@ -555,14 +555,14 @@ public static class DeskinationSeeder
             Notes: "Designated corner workstation for Executive & Legal."
         ),
 
-        // New York Floor 22 Desks
+        // Belfast Floor 2 Desks
         new(
-            Id: "desk-ny-2201",
-            Code: "NY-2201",
-            Name: "Desk 2201 - Hudson View Standing 1",
-            LocationId: "loc-ny",
-            FloorId: "flr-ny-22",
-            ZoneId: "zn-ny-west",
+            Id: "desk-bfs-201",
+            Code: "BFS-201",
+            Name: "Desk 201 - Harbour View Standing 1",
+            LocationId: "loc-belfast",
+            FloorId: "flr-bfs-2",
+            ZoneId: "zn-bfs-west",
             DeskType: DeskType.Standing,
             AllocationType: DeskAllocationType.Designated,
             DesignatedUserId: "usr-david",
@@ -576,12 +576,12 @@ public static class DeskinationSeeder
             Notes: "Designated desk for David Kim (Enterprise Sales)."
         ),
         new(
-            Id: "desk-ny-2202",
-            Code: "NY-2202",
-            Name: "Desk 2202 - Hudson View Standing 2",
-            LocationId: "loc-ny",
-            FloorId: "flr-ny-22",
-            ZoneId: "zn-ny-west",
+            Id: "desk-bfs-202",
+            Code: "BFS-202",
+            Name: "Desk 202 - Harbour View Standing 2",
+            LocationId: "loc-belfast",
+            FloorId: "flr-bfs-2",
+            ZoneId: "zn-bfs-west",
             DeskType: DeskType.Ultrawide,
             AllocationType: null,
             DesignatedUserId: null,
@@ -595,12 +595,12 @@ public static class DeskinationSeeder
             Notes: "High-power workstation with single cable docking."
         ),
         new(
-            Id: "desk-ny-2203",
-            Code: "NY-2203",
-            Name: "Desk 2203 - Client Bay Alpha",
-            LocationId: "loc-ny",
-            FloorId: "flr-ny-22",
-            ZoneId: "zn-ny-east",
+            Id: "desk-bfs-203",
+            Code: "BFS-203",
+            Name: "Desk 203 - Client Bay Alpha",
+            LocationId: "loc-belfast",
+            FloorId: "flr-bfs-2",
+            ZoneId: "zn-bfs-east",
             DeskType: DeskType.Standard,
             AllocationType: null,
             DesignatedUserId: null,
@@ -614,12 +614,12 @@ public static class DeskinationSeeder
             Notes: "Close to client presentation conference room."
         ),
         new(
-            Id: "desk-ny-2204",
-            Code: "NY-2204",
-            Name: "Desk 2204 - Client Bay Beta",
-            LocationId: "loc-ny",
-            FloorId: "flr-ny-22",
-            ZoneId: "zn-ny-east",
+            Id: "desk-bfs-204",
+            Code: "BFS-204",
+            Name: "Desk 204 - Client Bay Beta",
+            LocationId: "loc-belfast",
+            FloorId: "flr-bfs-2",
+            ZoneId: "zn-bfs-east",
             DeskType: DeskType.DualScreen,
             AllocationType: null,
             DesignatedUserId: null,
@@ -633,14 +633,14 @@ public static class DeskinationSeeder
             Notes: "Open bench seating."
         ),
 
-        // Berlin Mitte Desks
+        // Dubai DIFC Desks
         new(
-            Id: "desk-ber-101",
-            Code: "BER-101",
-            Name: "Desk 101 - Courtyard Oak Bench",
-            LocationId: "loc-berlin",
-            FloorId: "flr-ber-1",
-            ZoneId: "zn-ber-courtyard",
+            Id: "desk-dxb-101",
+            Code: "DXB-101",
+            Name: "Desk 101 - Atrium Oak Bench",
+            LocationId: "loc-dubai",
+            FloorId: "flr-dxb-1",
+            ZoneId: "zn-dxb-atrium",
             DeskType: DeskType.Standing,
             AllocationType: null,
             DesignatedUserId: null,
@@ -651,15 +651,15 @@ public static class DeskinationSeeder
             Status: DeskStatus.Active,
             Position: new DeskPosition(25, 40),
             Rotation: null,
-            Notes: "Peaceful garden courtyard view."
+            Notes: "Bright atrium view."
         ),
         new(
-            Id: "desk-ber-102",
-            Code: "BER-102",
-            Name: "Desk 102 - Courtyard Oak Bench 2",
-            LocationId: "loc-berlin",
-            FloorId: "flr-ber-1",
-            ZoneId: "zn-ber-courtyard",
+            Id: "desk-dxb-102",
+            Code: "DXB-102",
+            Name: "Desk 102 - Atrium Oak Bench 2",
+            LocationId: "loc-dubai",
+            FloorId: "flr-dxb-1",
+            ZoneId: "zn-dxb-atrium",
             DeskType: DeskType.Ultrawide,
             AllocationType: null,
             DesignatedUserId: null,
@@ -670,15 +670,15 @@ public static class DeskinationSeeder
             Status: DeskStatus.Active,
             Position: new DeskPosition(50, 40),
             Rotation: null,
-            Notes: "Direct natural light, facing greenery."
+            Notes: "Direct natural light in DIFC studio."
         ),
         new(
-            Id: "desk-ber-103",
-            Code: "BER-103",
+            Id: "desk-dxb-103",
+            Code: "DXB-103",
             Name: "Desk 103 - Focus Alcove",
-            LocationId: "loc-berlin",
-            FloorId: "flr-ber-1",
-            ZoneId: "zn-ber-courtyard",
+            LocationId: "loc-dubai",
+            FloorId: "flr-dxb-1",
+            ZoneId: "zn-dxb-atrium",
             DeskType: DeskType.QuietBooth,
             AllocationType: null,
             DesignatedUserId: null,
