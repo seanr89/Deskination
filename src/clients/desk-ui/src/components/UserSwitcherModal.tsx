@@ -67,7 +67,7 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({ isOpen, on
           <div>
             <h3 className="text-base font-semibold text-slate-900">Switch Workspace Persona</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Experience the platform as an employee booking desks, or as an office manager configuring inventory.
+              Experience the tool as an employee booking desks, or as an office manager configuring inventory.
             </p>
           </div>
           <button 

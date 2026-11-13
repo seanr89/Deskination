@@ -6,10 +6,19 @@ test.describe('FlexDesk UI — Mock Removal & Firebase Auth Gate E2E', () => {
   }) => {
     await page.goto('/');
 
-    // 1. Verify AuthView renders for unauthenticated sessions
+    // 1. Verify AuthView renders for unauthenticated sessions with internal single-company copy
+    await expect(page).toHaveTitle('FlexDesk - Internal Office Desk Booking');
+    await expect(page.getByText('Internal Office Desk Booking')).toBeVisible();
+    await expect(page.getByText(/enterprise/i)).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: 'Sign in to your workspace' })
     ).toBeVisible();
+
+    const metaDescription = await page
+      .locator('meta[name="description"]')
+      .getAttribute('content');
+    expect(metaDescription).toBeTruthy();
+    expect(metaDescription?.toLowerCase()).not.toContain('enterprise');
 
     // 2. Verify Demo Mode quick-launch personas and fallback badges have been removed
     await expect(page.getByText('Quick Demo Personas')).toHaveCount(0);

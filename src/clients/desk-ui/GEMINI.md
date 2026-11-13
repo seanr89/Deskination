@@ -5,7 +5,7 @@
 - **Framework**: React 19 (`react@^19.0.1`), TypeScript (`~7.0.2`), Vite 8 (`vite@^8.3.0`)
 - **Styling**: Tailwind CSS v4 (`@tailwindcss/vite`, `@import "tailwindcss";` in `src/index.css`)
 - **Icons**: `lucide-react`
-- **Authentication**: Firebase Web SDK (`firebase/auth`) with Email/Password authentication and Demo Mode fallback.
+- **Authentication**: Firebase Web SDK (`firebase/auth`) with Email/Password authentication.
 
 ## Architectural Conventions
 
