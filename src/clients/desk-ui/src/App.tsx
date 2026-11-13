@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { DeskBookingProvider, useDeskBooking } from './context/DeskBookingContext';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
-import { Header } from './components/Header';
+import { Header, type WorkspaceView } from './components/Header';
 import { BookDeskView } from './components/BookDeskView';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { AdminConsole } from './components/AdminConsole';
 import { OfficeDirectory } from './components/OfficeDirectory';
+import { UserProfileView } from './components/UserProfileView';
 import { AuthView } from './components/AuthView';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 function MainApp() {
-  const [currentView, setCurrentView] = useState<'book' | 'dashboard' | 'admin' | 'directory'>('book');
+  const [currentView, setCurrentView] = useState<WorkspaceView>('book');
   const { locations, isHydrating, apiError, clearApiError, refreshWorkspace } = useDeskBooking();
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -88,6 +89,7 @@ function MainApp() {
         {currentView === 'dashboard' && <EmployeeDashboard onNavigateToBooking={() => setCurrentView('book')} />}
         {currentView === 'directory' && <OfficeDirectory />}
         {currentView === 'admin' && <AdminConsole />}
+        {currentView === 'profile' && <UserProfileView />}
       </main>
 
       {/* Clean quiet footer */}
