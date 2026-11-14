@@ -16,5 +16,5 @@
 
 ## 3. Authentication
 
-- When `isAuthenticated` is `false`, `MainApp` renders `src/components/AuthView.tsx`.
-- `AuthView` supports three tabs (`'signin'`, `'signup'`, `'reset'`) and runtime Firebase config overrides.
+- When `isAuthenticated` is `false`, `MainApp` first presents `src/components/WelcomeLandingView.tsx` and navigates to `src/components/AuthView.tsx` (`'signin'`, `'signup'`, `'reset'`) with a `Back to Welcome` control.
+- `AuthView` supports runtime Firebase config overrides and pre-selected tab navigation from `WelcomeLandingView`.
