@@ -8,11 +8,13 @@ import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { AdminConsole } from './components/AdminConsole';
 import { OfficeDirectory } from './components/OfficeDirectory';
 import { UserProfileView } from './components/UserProfileView';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { AuthView } from './components/AuthView';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<WorkspaceView>('book');
+  const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
   const { locations, isHydrating, apiError, clearApiError, refreshWorkspace } = useDeskBooking();
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -28,7 +30,16 @@ function MainApp() {
   }
 
   if (!isAuthenticated) {
-    return <AuthView />;
+    return (
+      <>
+        <AuthView />
+        <CookieConsentBanner
+          isPreferencesOpen={isCookieModalOpen}
+          onOpenPreferences={() => setIsCookieModalOpen(true)}
+          onClosePreferences={() => setIsCookieModalOpen(false)}
+        />
+      </>
+    );
   }
 
   return (
@@ -89,7 +100,9 @@ function MainApp() {
         {currentView === 'dashboard' && <EmployeeDashboard onNavigateToBooking={() => setCurrentView('book')} />}
         {currentView === 'directory' && <OfficeDirectory />}
         {currentView === 'admin' && <AdminConsole />}
-        {currentView === 'profile' && <UserProfileView />}
+        {currentView === 'profile' && (
+          <UserProfileView onOpenCookiePreferences={() => setIsCookieModalOpen(true)} />
+        )}
       </main>
 
       {/* Clean quiet footer */}
@@ -106,9 +119,22 @@ function MainApp() {
                 {l.city} Hub
               </span>
             ))}
+            <button
+              type="button"
+              onClick={() => setIsCookieModalOpen(true)}
+              className="text-slate-600 hover:text-slate-900 underline underline-offset-2 font-medium transition-colors"
+            >
+              Cookie Preferences
+            </button>
           </div>
         </div>
       </footer>
+
+      <CookieConsentBanner
+        isPreferencesOpen={isCookieModalOpen}
+        onOpenPreferences={() => setIsCookieModalOpen(true)}
+        onClosePreferences={() => setIsCookieModalOpen(false)}
+      />
 
     </div>
   );
