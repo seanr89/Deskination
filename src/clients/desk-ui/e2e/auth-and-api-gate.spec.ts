@@ -1,17 +1,32 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Deskination UI — Mock Removal & Firebase Auth Gate E2E', () => {
-  test('renders Firebase Auth gate without Demo Mode personas or localStorage mock data', async ({
+test.describe('Deskination UI — Welcome Page, Mock Removal & Firebase Auth Gate E2E', () => {
+  test('renders welcome landing page before Firebase Auth gate without Demo Mode personas or localStorage mock data', async ({
     page,
   }) => {
     await page.goto('/');
 
-    // 1. Verify AuthView renders for unauthenticated sessions with internal single-company copy
+    // 1. Verify WelcomeLandingView renders for unauthenticated sessions with internal single-company copy
     await expect(page).toHaveTitle('Deskination - Internal Office Desk Booking');
-    await expect(page.getByText('Internal Office Desk Booking')).toBeVisible();
+    await expect(page.getByText('Internal Office Desk Booking', { exact: true })).toBeVisible();
     await expect(page.getByText(/enterprise/i)).toHaveCount(0);
     await expect(
-      page.getByRole('heading', { name: 'Sign in to your workspace' })
+      page.getByRole('heading', { name: 'Welcome to Deskination' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Interactive Floorplans' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Availability Calendar' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Belfast Hub' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'London Hub' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Dubai Hub' })
     ).toBeVisible();
 
     const metaDescription = await page
@@ -37,21 +52,36 @@ test.describe('Deskination UI — Mock Removal & Firebase Auth Gate E2E', () => 
     expect(localStorageKeys).not.toContain('flexdesk_desks_v1');
     expect(localStorageKeys).not.toContain('flexdesk_bookings_v1');
     expect(localStorageKeys).not.toContain('flexdesk_current_user_v1');
+
+    // 4. Navigate to Sign In and back to Welcome
+    await page.getByRole('main').getByRole('button', { name: 'Sign In' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Sign in to your workspace' })
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Back to Welcome' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Welcome to Deskination' })
+    ).toBeVisible();
   });
 
-  test('allows toggling between Sign In, Create Account, and Password Reset tabs and opening Firebase Config', async ({
+  test('allows navigating directly to Create Account from welcome page and toggling auth tabs and Firebase Config', async ({
     page,
   }) => {
     await page.goto('/');
 
-    // Switch to Create Account tab
-    await page.getByRole('button', { name: 'Create Account' }).first().click();
+    // Navigate directly to Create Account from welcome page
+    await page.getByRole('main').getByRole('button', { name: 'Create Account' }).click();
     await expect(
       page.getByRole('heading', { name: 'Create your employee account' })
     ).toBeVisible();
 
     // Switch back to Sign In and open Password Reset tab
     await page.getByRole('button', { name: 'Sign In' }).first().click();
+    await expect(
+      page.getByRole('heading', { name: 'Sign in to your workspace' })
+    ).toBeVisible();
+
     await page.getByRole('button', { name: 'Forgot password?' }).click();
     await expect(
       page.getByRole('heading', { name: 'Reset your password' })

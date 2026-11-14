@@ -12,11 +12,20 @@ import {
   Sliders,
   UserPlus,
   LogIn,
+  ArrowLeft,
 } from 'lucide-react';
 
-type AuthScreenTab = 'signin' | 'signup' | 'reset';
+export type AuthScreenTab = 'signin' | 'signup' | 'reset';
 
-export const AuthView: React.FC = () => {
+export interface AuthViewProps {
+  initialTab?: AuthScreenTab;
+  onBackToWelcome?: () => void;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({
+  initialTab = 'signin',
+  onBackToWelcome,
+}) => {
   const {
     signIn,
     signUp,
@@ -28,7 +37,11 @@ export const AuthView: React.FC = () => {
     clearError,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<AuthScreenTab>('signin');
+  const [activeTab, setActiveTab] = useState<AuthScreenTab>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -192,6 +205,18 @@ export const AuthView: React.FC = () => {
       className="min-h-screen bg-slate-50 flex flex-col justify-center pt-8 pb-36 px-4 sm:px-6 lg:px-8 text-slate-900"
     >
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {onBackToWelcome && (
+          <div className="mb-4 flex justify-start">
+            <button
+              type="button"
+              onClick={onBackToWelcome}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 py-1.5 px-2.5 rounded-lg hover:bg-slate-200/60 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              Back to Welcome
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-center gap-2.5">
           <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-base shadow-xs">
             DN

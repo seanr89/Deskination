@@ -5,7 +5,8 @@ import { useAuth } from './hooks/useAuth';
 import { Header, type WorkspaceView } from './components/Header';
 import { BookDeskView } from './components/BookDeskView';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
-import { AuthView } from './components/AuthView';
+import { AuthView, type AuthScreenTab } from './components/AuthView';
+import { WelcomeLandingView } from './components/WelcomeLandingView';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 const EmployeeDashboard = lazy(() =>
@@ -23,6 +24,8 @@ const UserProfileView = lazy(() =>
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<WorkspaceView>('book');
+  const [unauthScreen, setUnauthScreen] = useState<'welcome' | 'auth'>('welcome');
+  const [authInitialTab, setAuthInitialTab] = useState<AuthScreenTab>('signin');
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
   const { locations, isHydrating, apiError, clearApiError, refreshWorkspace } = useDeskBooking();
   const { isAuthenticated, isLoading } = useAuth();
@@ -41,7 +44,24 @@ function MainApp() {
   if (!isAuthenticated) {
     return (
       <>
-        <AuthView />
+        {unauthScreen === 'welcome' ? (
+          <WelcomeLandingView
+            onSignIn={() => {
+              setAuthInitialTab('signin');
+              setUnauthScreen('auth');
+            }}
+            onCreateAccount={() => {
+              setAuthInitialTab('signup');
+              setUnauthScreen('auth');
+            }}
+            onOpenCookiePreferences={() => setIsCookieModalOpen(true)}
+          />
+        ) : (
+          <AuthView
+            initialTab={authInitialTab}
+            onBackToWelcome={() => setUnauthScreen('welcome')}
+          />
+        )}
         <CookieConsentBanner
           isPreferencesOpen={isCookieModalOpen}
           onOpenPreferences={() => setIsCookieModalOpen(true)}
