@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { DeskBookingProvider, useDeskBooking } from './context/DeskBookingContext';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { Header, type WorkspaceView } from './components/Header';
 import { BookDeskView } from './components/BookDeskView';
-import { EmployeeDashboard } from './components/EmployeeDashboard';
-import { AdminConsole } from './components/AdminConsole';
-import { OfficeDirectory } from './components/OfficeDirectory';
-import { UserProfileView } from './components/UserProfileView';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { AuthView } from './components/AuthView';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
+
+const EmployeeDashboard = lazy(() =>
+  import('./components/EmployeeDashboard').then(m => ({ default: m.EmployeeDashboard }))
+);
+const AdminConsole = lazy(() =>
+  import('./components/AdminConsole').then(m => ({ default: m.AdminConsole }))
+);
+const OfficeDirectory = lazy(() =>
+  import('./components/OfficeDirectory').then(m => ({ default: m.OfficeDirectory }))
+);
+const UserProfileView = lazy(() =>
+  import('./components/UserProfileView').then(m => ({ default: m.UserProfileView }))
+);
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<WorkspaceView>('book');
@@ -96,13 +105,22 @@ function MainApp() {
 
       {/* Main Viewport Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {currentView === 'book' && <BookDeskView />}
-        {currentView === 'dashboard' && <EmployeeDashboard onNavigateToBooking={() => setCurrentView('book')} />}
-        {currentView === 'directory' && <OfficeDirectory />}
-        {currentView === 'admin' && <AdminConsole />}
-        {currentView === 'profile' && (
-          <UserProfileView onOpenCookiePreferences={() => setIsCookieModalOpen(true)} />
-        )}
+        <Suspense
+          fallback={
+            <div className="py-16 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
+              <RefreshCw className="w-4 h-4 animate-spin text-slate-400" aria-hidden="true" />
+              <span>Loading workspace view...</span>
+            </div>
+          }
+        >
+          {currentView === 'book' && <BookDeskView />}
+          {currentView === 'dashboard' && <EmployeeDashboard onNavigateToBooking={() => setCurrentView('book')} />}
+          {currentView === 'directory' && <OfficeDirectory />}
+          {currentView === 'admin' && <AdminConsole />}
+          {currentView === 'profile' && (
+            <UserProfileView onOpenCookiePreferences={() => setIsCookieModalOpen(true)} />
+          )}
+        </Suspense>
       </main>
 
       {/* Clean quiet footer */}
