@@ -109,15 +109,35 @@ const EMPTY_USER: User = {
 
 const DeskBookingContext = createContext<DeskBookingContextType | undefined>(undefined);
 
-export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export interface DeskBookingProviderProps {
+  children: React.ReactNode;
+  initialUsers?: User[];
+  initialCurrentUser?: User;
+  initialLocations?: Location[];
+  initialDesks?: Desk[];
+  initialBookings?: Booking[];
+}
+
+export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
+  children,
+  initialUsers = [],
+  initialCurrentUser = EMPTY_USER,
+  initialLocations = [],
+  initialDesks = [],
+  initialBookings = [],
+}) => {
   // 1. Users
-  const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
+  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
 
   // 2. Locations
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [currentLocationId, setCurrentLocationId] = useState<string>('');
-  const [currentFloorId, setCurrentFloorId] = useState<string>('');
+  const [locations, setLocations] = useState<Location[]>(initialLocations);
+  const [currentLocationId, setCurrentLocationId] = useState<string>(
+    () => initialLocations[0]?.id ?? ''
+  );
+  const [currentFloorId, setCurrentFloorId] = useState<string>(
+    () => initialLocations[0]?.floors?.[0]?.id ?? ''
+  );
 
   // Keep floor ID synchronized when location changes
   useEffect(() => {
@@ -131,10 +151,10 @@ export const DeskBookingProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [currentLocationId, locations, currentFloorId]);
 
   // 3. Desks
-  const [desks, setDesks] = useState<Desk[]>([]);
+  const [desks, setDesks] = useState<Desk[]>(initialDesks);
 
   // 4. Bookings
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
 
   // 5. Active selection date & slot
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayIsoDate());
