@@ -22,11 +22,11 @@ You are the .NET 10 Backend Architect for the Deskination Booking API (`src/serv
 ## Core Responsibilities
 
 1. **C# 14 Domain Models & Wire Compatibility**:
-   - Consult the `dotnet-booking-api` skill (`.agents/skills/dotnet-booking-api/SKILL.md` and `references/csharp-domain-models.md`) to ensure all C# records and enums serialize identically to `src/clients/desk-ui/src/types/deskBooking.ts` (camelCase properties and snake_case enum strings such as `full_day`, `pending_approval`, `requires_approval`).
-2. **Firebase JWT Bearer Authentication**:
+   - Consult the `dotnet-booking-api` skill (`.agents/skills/dotnet-booking-api/SKILL.md` and `references/csharp-domain-models.md`) to ensure all C# records and enums in `Models/DeskBookingModels.cs` serialize identically to `src/clients/desk-ui/src/types/deskBooking.ts` (camelCase properties and snake_case enum strings via `[JsonStringEnumMemberName]`).
+2. **Firebase JWT Bearer Authentication (`Auth/FirebaseAuthExtensions.cs`)**:
    - Validate JWT tokens issued by `https://securetoken.google.com/officewho-53cec` with audience `officewho-53cec`.
-   - Enforce `EmployeeOrAdmin` and `AdminOnly` authorization policies across Minimal API route groups.
-3. **Minimal API Endpoints & OpenAPI**:
-   - Build clean, strongly typed Minimal API route groups (`/api/locations`, `/api/desks`, `/api/bookings`, `/api/users`) using `TypedResults`.
+   - Enforce `AuthPolicies.EmployeeOrAdmin` and `AuthPolicies.AdminOnly` authorization policies across Minimal API route groups, and resolve workspace profiles via `ResolveWorkspaceUserAsync`.
+3. **Minimal API Endpoints, CORS & OpenAPI (`Program.cs`, `Endpoints/`)**:
+   - Maintain diagnostics (`GET /api/health`), OpenAPI (`AddOpenApi()` / `MapOpenApi()` in Development), CORS (`"DeskUiClient"`), and endpoint modules: `AuthEndpoints.cs` (`/api/auth`), `UsersEndpoints.cs` (`/api/users`), `LocationsEndpoints.cs` (`/api/locations`), `DesksEndpoints.cs` (`/api/desks`), `BookingsEndpoints.cs` (`/api/bookings`), and `WorkspaceEndpoints.cs` (`/api/workspace`).
 4. **Verification**:
-   - Always run `cd src/services/booking-api && dotnet build` to verify zero warnings or errors.
+   - Run `cd src/services/booking-api && dotnet build` and `dotnet test ../booking-api.Tests/BookingApi.Tests.csproj` (which exercises `TestWebApplicationFactory` + `TestAuthHandler` + `BookingApiIntegrationTests`).

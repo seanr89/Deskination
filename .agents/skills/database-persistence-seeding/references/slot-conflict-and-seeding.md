@@ -1,4 +1,4 @@
-# EF Core Persistence, Slot Overlap Matrix & Seed Data Reference
+# EF Core Persistence, Slot Overlap Matrix & Canonical Seeding Reference
 
 ## 1. Slot Overlap Truth Table
 
@@ -10,74 +10,55 @@
 | **`full_day`** | Conflict | Conflict | Conflict |
 | **`morning` + `afternoon`** | Conflict | Conflict | Conflict |
 
-C# predicate for checking if an existing booking conflicts with `requestedSlot`:
+Predicate in `src/services/booking-api/Data/DeskinationDbContext.cs` (`BookingDomainRules`):
 
 ```csharp
 public static bool SlotsOverlap(SlotType existing, SlotType requested) =>
     existing == SlotType.FullDay ||
     requested == SlotType.FullDay ||
     existing == requested;
+
+public static bool IsActiveBooking(BookingStatus status) =>
+    status != BookingStatus.Cancelled && status != BookingStatus.Rejected;
 ```
 
-## 2. EF Core `DeskinationDbContext` Setup (.NET 10)
+`BookingDomainRules` also implements `ComputeDeskAvailability(Desk, IEnumerable<Booking>, User)` and `ComputeUserStats(IReadOnlyList<Booking>, string? referenceDate, string? month)`.
 
-```csharp
-using BookingApi.Models;
-using Microsoft.EntityFrameworkCore;
+## 2. Actual EF Core `DeskinationDbContext` Mapping (`Data/DeskinationDbContext.cs`)
 
-namespace BookingApi.Data;
+`DeskinationDbContext` exposes `Users`, `Locations`, `Desks`, and `Bookings` `DbSet<T>` properties and persists nested collections/value objects as camelCase JSON strings via explicit `ValueConverter` + `ValueComparer` definitions so the schema works identically on both PostgreSQL 17 (`Npgsql`) and EF Core `InMemory`:
 
-public sealed class DeskinationDbContext(DbContextOptions<DeskinationDbContext> options)
-    : DbContext(options)
-{
-    public DbSet<User> Users => Set<User>();
-    public DbSet<Location> Locations => Set<Location>();
-    public DbSet<Desk> Desks => Set<Desk>();
-    public DbSet<Booking> Bookings => Set<Booking>();
+- `User`: primary key `Id`, unique index on `Email`, `Role` stored as string.
+- `Location`: primary key `Id`, `Floors` (`IReadOnlyList<Floor>`, including nested `Zones` and `Elements`) serialized via `floorsConverter` / `floorsComparer`.
+- `Desk`: primary key `Id`, composite index on `(LocationId, FloorId)`, `DeskType`/`AllocationType`/`Status` stored as strings, `Equipment` (`IReadOnlyList<string>`) via `equipmentConverter`, and `Position` (`DeskPosition`) via `positionConverter`.
+- `Booking`: primary key `Id`, composite indexes on `(DeskId, Date)` and `(UserId, Date)`, `Slot`/`Status` stored as strings.
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<User>(b =>
-        {
-            b.HasKey(u => u.Id);
-            b.HasIndex(u => u.Email).IsUnique();
-        });
+Database startup (`Program.cs`) uses:
+- `builder.Services.AddDeskinationDatabase(builder.Configuration)` — probes PostgreSQL (`ConnectionStrings:DefaultConnection`) with a 350ms TCP connect timeout and falls back to `UseInMemoryDatabase("DeskinationWorkspaceDb")` if unreachable or when `Database:Provider == "InMemory"`.
+- `await DeskinationSeeder.EnsureSeededAsync(app.Services)` — calls `await db.Database.EnsureCreatedAsync()` and inserts seed entities when tables are empty (note: EF Core migrations are not yet used; tracked in `TODO.md`).
 
-        modelBuilder.Entity<Location>(b =>
-        {
-            b.HasKey(l => l.Id);
-            b.OwnsMany(l => l.Floors, f =>
-            {
-                f.ToJson();
-                f.OwnsMany(fl => fl.Zones);
-                f.OwnsMany(fl => fl.Elements);
-            });
-        });
+## 3. Canonical Seed Dataset (`src/services/booking-api/Data/DeskinationSeeder.cs`)
 
-        modelBuilder.Entity<Desk>(b =>
-        {
-            b.HasKey(d => d.Id);
-            b.HasIndex(d => new { d.LocationId, d.FloorId });
-            b.OwnsOne(d => d.Position);
-            b.PrimitiveCollection(d => d.Equipment);
-        });
+`DeskinationSeeder` is the single source of truth for initial workspace data (client-side mock seeding was removed in favor of backend hydration):
 
-        modelBuilder.Entity<Booking>(b =>
-        {
-            b.HasKey(bk => bk.Id);
-            b.HasIndex(bk => new { bk.DeskId, bk.Date });
-            b.HasIndex(bk => new { bk.UserId, bk.Date });
-        });
-    }
-}
-```
+- **`InitialUsers`**:
+  - `usr-sarah`: `sarah.chen@acme-corp.internal` (`Role.Employee`)
+  - `usr-marcus`: `marcus.vance@acme-corp.internal` (`Role.Employee`)
+  - `usr-priya`: `priya.patel@acme-corp.internal` (`Role.Employee`)
+  - `usr-david`: `david.kim@acme-corp.internal` (`Role.Employee`)
+  - `usr-admin-elena`: `elena.rostova@acme-corp.internal` (`Role.Admin`)
+- **`InitialLocations`**:
+  - `loc-london` (London HQ — Level 4 & Level 5)
+  - `loc-belfast` (Belfast Hub — Titanic Quarter)
+  - `loc-dubai` (Dubai Hub — DIFC)
+- **`InitialDesks` & `InitialBookings`**:
+  - Seeded workstations across all three hubs (covering `unreserved`, `designated`, and `requires_approval` policies, plus `active` and `maintenance` statuses) and initial bookings across `confirmed`, `checked_in`, `pending_approval`, and `cancelled` states (including `bkg-pending-1` used in integration tests).
 
-## 3. Canonical Seed Users (`INITIAL_USERS`)
+## 4. Test Harness Persistence (`src/services/booking-api.Tests/TestWebApplicationFactory.cs`)
 
-Keep seed users in `booking-api` aligned with `src/clients/desk-ui/src/mock/initialData.ts` so Firebase Auth email matching resolves consistent IDs and roles:
+`TestWebApplicationFactory` isolates each test run by overriding:
+- `Database:Provider = "InMemory"`
+- `Database:InMemoryName = "DeskinationTestDb_<guid>"`
+- `ConnectionStrings:DefaultConnection = ""`
 
-- `usr-sarah`: `sarah.chen@acme-corp.internal` (`employee`, Frontend Engineering, Senior Staff Engineer)
-- `usr-marcus`: `marcus.vance@acme-corp.internal` (`employee`, Product Design, Lead Product Designer)
-- `usr-priya`: `priya.patel@acme-corp.internal` (`employee`, Core Infrastructure, Engineering Manager)
-- `usr-david`: `david.kim@acme-corp.internal` (`employee`, Enterprise Sales, Account Executive)
-- `usr-admin-elena`: `elena.rostova@acme-corp.internal` (`admin`, Workplace Operations, Director of Workplace & Facilities)
+This ensures `BookingApiIntegrationTests` runs deterministically without touching local or Docker PostgreSQL instances.

@@ -1,9 +1,10 @@
 # Canonical C# 14 Domain Models for `booking-api`
 
-Use these C# types in `src/services/booking-api/Models/DeskBookingModels.cs` to guarantee 1:1 JSON compatibility with `src/clients/desk-ui/src/types/deskBooking.ts`.
+These types live in `src/services/booking-api/Models/DeskBookingModels.cs` and guarantee 1:1 JSON compatibility with `src/clients/desk-ui/src/types/deskBooking.ts`.
+
+## 1. Domain Enums & Core Entities
 
 ```csharp
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace BookingApi.Models;
@@ -171,3 +172,53 @@ public sealed record Booking(
     string? ReviewNotes = null
 );
 ```
+
+## 2. Computed Availability, Analytics & Response Models
+
+```csharp
+public sealed record BookedBySlotInfo(string UserName, string Department);
+
+public sealed record BookedBySlots(
+    [property: JsonPropertyName("morning"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? Morning = null,
+    [property: JsonPropertyName("afternoon"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? Afternoon = null,
+    [property: JsonPropertyName("full_day"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    BookedBySlotInfo? FullDay = null
+);
+
+public sealed record SlotAvailability(
+    bool Morning,
+    bool Afternoon,
+    [property: JsonPropertyName("full_day")] bool FullDay,
+    bool? IsDesignatedToOther = null,
+    string? DesignatedUser = null,
+    bool? RequiresApproval = null,
+    BookedBySlots? BookedBy = null
+);
+
+public sealed record MostCommonDeskStat(string DeskCode, string DeskName, int Count);
+
+public sealed record UserStats(
+    int TotalBookings,
+    int UpcomingCount,
+    int CompletedCount,
+    int CancelledCount,
+    int PendingApprovalsCount,
+    int CancellationRate,
+    MostCommonDeskStat? MostCommonDesk,
+    string PreferredSlot,
+    int DaysInOfficeThisMonth
+);
+
+public sealed record LocationOccupancyResponse(int Total, int Booked, int Rate);
+public sealed record BookingActionResponse(bool Success, string Message, Booking? Booking = null);
+public sealed record WorkspaceSnapshotResponse(
+    IReadOnlyList<User> Users,
+    IReadOnlyList<Location> Locations,
+    IReadOnlyList<Desk> Desks,
+    IReadOnlyList<Booking> Bookings
+);
+```
+
+Request DTOs in the same file: `UpsertUserRequest`, `CreateUserRequest`, `CreateLocationRequest`, `UpdateFloorElementsRequest`, `CreateDeskRequest`, `UpdateDeskAllocationRequest`, `UpdateDeskPositionRequest`, `DeskPositionUpdateItem`, `BatchUpdateDeskPositionsRequest`, `CreateBookingRequest`, `UpdateBookingRequest`, `CancelBookingRequest`, `ApproveBookingRequest`, `RejectBookingRequest`.
