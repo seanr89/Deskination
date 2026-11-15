@@ -6,6 +6,7 @@ Deskination is a lightweight internal office desk booking tool designed for a si
 
 ```text
 .
+├── .github/workflows/                # GitHub Actions CI workflows (PR checks & Docker build)
 ├── Makefile                          # Unified build, test, Docker Compose, and dev workflow commands
 ├── docker-compose.yml                # Local PostgreSQL, Booking API, and optional dev UI stack
 └── src/
@@ -78,3 +79,26 @@ npm run dev
 - **API Integration Tests:** `dotnet test src/services/booking-api.Tests`
 - **UI Unit Tests:** `cd src/clients/desk-ui && npm test`
 - **UI E2E Tests:** `cd src/clients/desk-ui && npm run test:e2e`
+
+## CI / GitHub Actions
+
+Pull requests targeting `main`, pushes to `main`, and manual `workflow_dispatch` runs are validated by GitHub Actions:
+
+- **PR Checks ([`.github/workflows/pr-checks.yml`](.github/workflows/pr-checks.yml))**: Uses path change detection (`Detect Changed Paths` via `dorny/paths-filter`) so jobs only run when their target directory (`src/services/**` or `src/clients/**`) or the workflow itself changes (or on `workflow_dispatch`), with dependency/Playwright caching, least-privilege permissions, concurrency cancellation on PR updates, and 7-day failure artifact uploads (`.trx` test logs and Playwright HTML reports/traces):
+  - `Backend (.NET 10 Build & Tests)`: Runs when `src/services/**` changes; restores, builds (`Release`), and runs xUnit integration tests for `booking-api` using the self-contained `InMemory` EF Core provider.
+  - `Frontend (Lint, Build & Unit Tests)`: Runs when `src/clients/**` changes; runs `npm ci`, TypeScript type-check (`npm run lint`), Vite production build (`npm run build`), and Vitest unit tests (`npm test`) on Node 24 without requiring `.env` or Firebase secrets.
+  - `Frontend E2E (Playwright Chromium)`: Runs when `src/clients/**` changes; installs Chromium and runs `npm run test:e2e` against the local Vite server (`http://127.0.0.1:4173`).
+  - `CI Status`: Always-running aggregate gate job that succeeds when all executed jobs pass (and skipped path-filtered jobs did not fail).
+- **Docker Build ([`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml))**: Verifies `src/services/booking-api/Dockerfile` builds cleanly (`push: false`) only when `src/services/booking-api/**`, `docker-compose.yml`, `.dockerignore`, or the workflow file changes.
+
+### Branch Protection (`main`)
+
+Configure the following **exact job name** from `PR Checks` as the required status check on `main`:
+
+- `CI Status`
+
+> **Note:** Do not mark `Backend (.NET 10 Build & Tests)`, `Frontend (Lint, Build & Unit Tests)`, `Frontend E2E (Playwright Chromium)`, or `Booking API Docker Build` individually as required checks in branch protection, because path-filtered jobs are skipped when their target directory has no edits (and skipped checks remain `Pending` in GitHub Branch Protection). `CI Status` enforces every executed job while allowing skipped jobs on single-component or docs-only PRs.
+
+### Action Version Pinning
+
+Official and third-party GitHub Actions (`actions/checkout`, `actions/setup-dotnet`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `dorny/paths-filter`, `docker/setup-buildx-action`, `docker/build-push-action`) are pinned to current supported major versions and should be reviewed quarterly or upon security advisories.

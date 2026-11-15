@@ -1,0 +1,226 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+
+    steps:
+      - name: Checkout repository for push comparison
+        if: github.event_name == 'push'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes in target directories
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            backend:
+              - 'src/services/**'
+              - '.github/workflows/pr-checks.yml'
+            frontend:
+              - 'src/clients/**'
+              - '.github/workflows/pr-checks.yml'
+
+  backend:
+    name: Backend (.NET 10 Build & Tests)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' }}
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src/services/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore .NET dependencies
+        run: |
+          dotnet restore src/services/booking-api/booking-api.csproj
+          dotnet restore src/services/booking-api.Tests/BookingApi.Tests.csproj
+
+      - name: Build Booking API
+        run: dotnet build src/services/booking-api/booking-api.csproj --no-restore -c Release
+
+      - name: Run xUnit integration tests
+        run: >
+          dotnet test src/services/booking-api.Tests/BookingApi.Tests.csproj
+          --no-restore
+          -c Release
+          --logger "trx;LogFileName=api-test-results.trx"
+          --results-directory src/services/booking-api.Tests/TestResults
+
+      - name: Upload backend test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-results
+          path: src/services/booking-api.Tests/TestResults/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend:
+    name: Frontend (Lint, Build & Unit Tests)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' }}
+    defaults:
+      run:
+        working-directory: src/clients/desk-ui
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/clients/desk-ui/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Type-check TypeScript
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Run Vitest unit tests
+        run: npm test
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright Chromium)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' }}
+    defaults:
+      run:
+        working-directory: src/clients/desk-ui
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/clients/desk-ui/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright Chromium browser
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright Chromium & system dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright Chromium system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report and traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-e2e-artifacts
+          path: |
+            src/clients/desk-ui/playwright-report/
+            src/clients/desk-ui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - backend
+      - frontend
+      - frontend-e2e
+    if: always()
+    steps:
+      - name: Verify required checks passed or were skipped
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
+        run: |
+          echo "changes: ${CHANGES_RESULT}"
+          echo "backend: ${BACKEND_RESULT}"
+          echo "frontend: ${FRONTEND_RESULT}"
+          echo "frontend-e2e: ${FRONTEND_E2E_RESULT}"
+
+          if [[ "${CHANGES_RESULT}" != "success" ]]; then
+            echo "::error::Path change detection failed (${CHANGES_RESULT})."
+            exit 1
+          fi
+
+          for job in BACKEND_RESULT FRONTEND_RESULT FRONTEND_E2E_RESULT; do
+            val="${!job}"
+            if [[ "${val}" != "success" && "${val}" != "skipped" ]]; then
+              echo "::error::${job} ended with status '${val}'."
+              exit 1
+            fi
+          done
+
+          echo "All applicable PR checks passed."
