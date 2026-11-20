@@ -90,6 +90,26 @@ Pull requests targeting `main`, pushes to `main`, and manual `workflow_dispatch`
   - `Frontend E2E (Playwright Chromium)`: Runs when `src/clients/**` changes; installs Chromium and runs `npm run test:e2e` against the local Vite server (`http://127.0.0.1:4173`).
   - `CI Status`: Always-running aggregate gate job that succeeds when all executed jobs pass (and skipped path-filtered jobs did not fail).
 - **Docker Build ([`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml))**: Verifies `src/services/booking-api/Dockerfile` builds cleanly (`push: false`) only when `src/services/booking-api/**`, `docker-compose.yml`, `.dockerignore`, or the workflow file changes.
+- **Backend Deploy ([`.github/workflows/deploy-booking-api.yml`](.github/workflows/deploy-booking-api.yml))**: Restores, tests (`Release`), publishes (`dotnet publish -c Release --no-restore -o ./publish /p:UseAppHost=false`), and deploys `src/services/booking-api` to **Azure App Service Web App** via Azure OIDC (`azure/login@v2` + `azure/webapps-deploy@v3`) on pushes to `main` touching `src/services/booking-api/**` or the workflow file, as well as manual `workflow_dispatch` runs.
+
+### Azure App Service Deployment Configuration (`booking-api`)
+
+Configure the following in GitHub **Settings → Secrets and variables → Actions** before enabling live deployments (if any required OIDC or Web App value is unset, the workflow skips login and deployment with a warning):
+
+- **GitHub Actions Secrets & Variables** (for Azure Entra ID OIDC federated credentials & target app):
+  - `AZURE_CLIENT_ID`: Application (client) ID of the Entra ID App Registration / Managed Identity with a federated credential for the repository `production` environment or `main` branch.
+  - `AZURE_TENANT_ID`: Azure Entra ID tenant (directory) ID.
+  - `AZURE_SUBSCRIPTION_ID`: Target Azure subscription ID.
+  - `AZURE_WEBAPP_NAME`: Name of the target Azure App Service Web App.
+  - `AZURE_WEBAPP_SLOT_NAME` *(optional)*: Target deployment slot name (defaults to `production`).
+- **Azure App Service Application Settings & Connection Strings** (Linux App Service `.NET 10` uses `__` for nested configuration keys):
+  - `ASPNETCORE_ENVIRONMENT`: `Production`
+  - `Database__Provider`: `PostgreSQL` (explicitly uses PostgreSQL rather than falling back to `InMemory` if the local 350ms TCP probe times out).
+  - `ConnectionStrings__DefaultConnection` *(or App Service Connection String `DefaultConnection`)*: PostgreSQL connection string for the managed database.
+  - `Cors__AllowedOrigins` *(or indexed `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`)*: Comma- or semicolon-delimited frontend origin(s) allowed by CORS (e.g., `https://<your-static-web-app>.azurestaticapps.net`).
+  - `Firebase__ProjectId`, `Firebase__Issuer`, `Firebase__Audience`: Firebase project settings (`officewho-53cec`, `https://securetoken.google.com/officewho-53cec`, `officewho-53cec`).
+- **Azure App Service Health Check**:
+  - Set **Health check path** to `/api/health` (unauthenticated JSON diagnostics endpoint).
 
 ### Branch Protection (`main`)
 
@@ -101,4 +121,4 @@ Configure the following **exact job name** from `PR Checks` as the required stat
 
 ### Action Version Pinning
 
-Official and third-party GitHub Actions (`actions/checkout`, `actions/setup-dotnet`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `dorny/paths-filter`, `docker/setup-buildx-action`, `docker/build-push-action`) are pinned to current supported major versions and should be reviewed quarterly or upon security advisories.
+Official and third-party GitHub Actions (`actions/checkout`, `actions/setup-dotnet`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `actions/download-artifact`, `dorny/paths-filter`, `docker/setup-buildx-action`, `docker/build-push-action`, `azure/login`, `azure/webapps-deploy`) are pinned to current supported major versions and should be reviewed quarterly or upon security advisories.

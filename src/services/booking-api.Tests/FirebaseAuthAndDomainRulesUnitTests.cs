@@ -5,6 +5,9 @@ using System.Text.Json;
 using BookingApi.Auth;
 using BookingApi.Data;
 using BookingApi.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace BookingApi.Tests;
@@ -733,5 +736,92 @@ public sealed class FirebaseAuthAndDomainRulesUnitTests
         Assert.Equal(BookingStatus.Confirmed, afternoonPayload.Booking.Status);
         Assert.Equal("desk-ldn-402", afternoonPayload.Booking.DeskId);
         Assert.Equal(SlotType.Afternoon, afternoonPayload.Booking.Slot);
+    }
+
+    // =========================================================================
+    // 4. Azure App Service Configuration Unit Tests
+    // =========================================================================
+
+    [Fact]
+    public void ResolveCorsAllowedOrigins_ParsesScalarArrayNormalizationAndFallback()
+    {
+        var emptyConfig = new ConfigurationBuilder().Build();
+        Assert.Equal(
+            ["http://localhost:3000", "http://localhost:5173"],
+            Program.ResolveCorsAllowedOrigins(emptyConfig));
+
+        var whitespaceConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins"] = "   "
+            })
+            .Build();
+        Assert.Equal(
+            ["http://localhost:3000", "http://localhost:5173"],
+            Program.ResolveCorsAllowedOrigins(whitespaceConfig));
+
+        var scalarConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins"] =
+                    " https://app.azurestaticapps.net/ , https://staging.azurestaticapps.net; https://APP.azurestaticapps.net/ "
+            })
+            .Build();
+        Assert.Equal(
+            ["https://app.azurestaticapps.net", "https://staging.azurestaticapps.net"],
+            Program.ResolveCorsAllowedOrigins(scalarConfig));
+
+        var arrayConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins:0"] = "https://one.azurestaticapps.net/",
+                ["Cors:AllowedOrigins:1"] = "https://two.azurestaticapps.net"
+            })
+            .Build();
+        Assert.Equal(
+            ["https://one.azurestaticapps.net", "https://two.azurestaticapps.net"],
+            Program.ResolveCorsAllowedOrigins(arrayConfig));
+
+        // Scalar env override must supersede JSON array children
+        var overriddenConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins:0"] = "http://localhost:3000",
+                ["Cors:AllowedOrigins:1"] = "http://localhost:5173"
+            })
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins"] = "https://prod.azurestaticapps.net/"
+            })
+            .Build();
+        Assert.Equal(
+            ["https://prod.azurestaticapps.net"],
+            Program.ResolveCorsAllowedOrigins(overriddenConfig));
+    }
+
+    [Theory]
+    [InlineData("PostgreSQL")]
+    [InlineData("Postgres")]
+    [InlineData("Npgsql")]
+    public void AddDeskinationDatabase_WhenProviderIsPostgreSQL_RegistersNpgsqlProviderWithoutLocalFallback(
+        string providerSetting)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Provider"] = providerSetting,
+                ["ConnectionStrings:DefaultConnection"] =
+                    "Host=nonexistent-azure-postgres.postgres.database.azure.com;Port=5432;Database=deskination;Username=deskination;Password=secret"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddDeskinationDatabase(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DeskinationDbContext>();
+
+        Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", db.Database.ProviderName);
     }
 }

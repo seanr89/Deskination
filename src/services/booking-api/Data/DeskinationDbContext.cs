@@ -267,17 +267,22 @@ public static class DatabaseConfigurationExtensions
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var providerSetting = configuration["Database:Provider"];
         var forceInMemory = string.Equals(
-            configuration["Database:Provider"],
+            providerSetting,
             "InMemory",
             StringComparison.OrdinalIgnoreCase);
+        var forcePostgres =
+            string.Equals(providerSetting, "PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(providerSetting, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(providerSetting, "Npgsql", StringComparison.OrdinalIgnoreCase);
         var inMemoryDatabaseName = !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"])
             ? configuration["Database:InMemoryName"]!
             : "DeskinationWorkspaceDb";
 
         var usePostgres = !forceInMemory &&
                           !string.IsNullOrWhiteSpace(connectionString) &&
-                          IsPostgresReachable(connectionString);
+                          (forcePostgres || IsPostgresReachable(connectionString));
 
         services.AddDbContext<DeskinationDbContext>(options =>
         {

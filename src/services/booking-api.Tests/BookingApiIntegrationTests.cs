@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using BookingApi.Data;
 using BookingApi.Models;
+using Microsoft.AspNetCore.Hosting;
 using Xunit;
 
 namespace BookingApi.Tests;
@@ -349,5 +350,79 @@ public sealed class BookingApiIntegrationTests
         Assert.Equal(BookingStatus.Cancelled, cancelledBooking.Status);
         Assert.False(string.IsNullOrWhiteSpace(cancelledBooking.CancelledAt));
         Assert.Contains("Leaving early for dentist appointment", cancelledBooking.Notes);
+    }
+
+    [Fact]
+    public async Task CorsPolicy_AllowsConfiguredDefaultOriginsAndRejectsUnlistedOrigins()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health");
+        allowedRequest.Headers.Add("Origin", "http://localhost:3000");
+
+        var allowedResponse = await client.SendAsync(allowedRequest);
+        Assert.Equal(HttpStatusCode.OK, allowedResponse.StatusCode);
+        Assert.True(allowedResponse.Headers.TryGetValues("Access-Control-Allow-Origin", out var allowedHeaders));
+        Assert.Contains("http://localhost:3000", allowedHeaders);
+
+        using var unlistedRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health");
+        unlistedRequest.Headers.Add("Origin", "https://untrusted.example.com");
+
+        var unlistedResponse = await client.SendAsync(unlistedRequest);
+        Assert.Equal(HttpStatusCode.OK, unlistedResponse.StatusCode);
+        Assert.False(unlistedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task CorsPolicy_WhenOverriddenInConfiguration_AllowsConfiguredOriginsAndRejectsUnlisted()
+    {
+        await using var baseFactory = new TestWebApplicationFactory();
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.UseSetting(
+                "Cors:AllowedOrigins",
+                "https://deskination.azurestaticapps.net, https://staging.azurestaticapps.net/"));
+        using var client = factory.CreateClient();
+
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health");
+        allowedRequest.Headers.Add("Origin", "https://deskination.azurestaticapps.net");
+
+        var allowedResponse = await client.SendAsync(allowedRequest);
+        Assert.Equal(HttpStatusCode.OK, allowedResponse.StatusCode);
+        Assert.True(allowedResponse.Headers.TryGetValues("Access-Control-Allow-Origin", out var allowedHeaders));
+        Assert.Contains("https://deskination.azurestaticapps.net", allowedHeaders);
+
+        using var preflightRequest = new HttpRequestMessage(HttpMethod.Options, "/api/health");
+        preflightRequest.Headers.Add("Origin", "https://staging.azurestaticapps.net");
+        preflightRequest.Headers.Add("Access-Control-Request-Method", "GET");
+
+        var preflightResponse = await client.SendAsync(preflightRequest);
+        Assert.Equal(HttpStatusCode.NoContent, preflightResponse.StatusCode);
+        Assert.True(preflightResponse.Headers.TryGetValues("Access-Control-Allow-Origin", out var preflightHeaders));
+        Assert.Contains("https://staging.azurestaticapps.net", preflightHeaders);
+
+        using var unlistedRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health");
+        unlistedRequest.Headers.Add("Origin", "https://untrusted.example.com");
+
+        var unlistedResponse = await client.SendAsync(unlistedRequest);
+        Assert.Equal(HttpStatusCode.OK, unlistedResponse.StatusCode);
+        Assert.False(unlistedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task ForwardedHeaders_WithReverseProxyHeaders_AreAcceptedByHealthEndpoint()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/health");
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        request.Headers.Add("X-Forwarded-For", "203.0.113.10");
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("healthy", payload.GetProperty("status").GetString());
     }
 }
