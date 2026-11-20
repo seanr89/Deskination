@@ -90,6 +90,21 @@ Pull requests targeting `main`, pushes to `main`, and manual `workflow_dispatch`
   - `Frontend E2E (Playwright Chromium)`: Runs when `src/clients/**` changes; installs Chromium and runs `npm run test:e2e` against the local Vite server (`http://127.0.0.1:4173`).
   - `CI Status`: Always-running aggregate gate job that succeeds when all executed jobs pass (and skipped path-filtered jobs did not fail).
 - **Docker Build ([`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml))**: Verifies `src/services/booking-api/Dockerfile` builds cleanly (`push: false`) only when `src/services/booking-api/**`, `docker-compose.yml`, `.dockerignore`, or the workflow file changes.
+- **Frontend Deploy ([`.github/workflows/deploy-desk-ui.yml`](.github/workflows/deploy-desk-ui.yml))**: Runs `npm run lint` and `npm test` for `src/clients/desk-ui`, then builds and deploys the SPA (`dist/`, including `public/staticwebapp.config.json`) to **Azure Static Web Apps** via `Azure/static-web-apps-deploy@v1` on pushes to `main`, PR preview environments (with automatic cleanup on PR close), and manual `workflow_dispatch` runs.
+
+### Azure Static Web Apps Deployment Configuration (`desk-ui`)
+
+Configure the following in GitHub **Settings → Secrets and variables → Actions** before enabling live deployments (if `AZURE_STATIC_WEB_APPS_API_TOKEN` is unset, the workflow skips the upload/close step with a warning):
+
+- **Required Secret**:
+  - `AZURE_STATIC_WEB_APPS_API_TOKEN`: Deployment token from the Azure Static Web App resource.
+- **Recommended Variable (or Secret)**:
+  - `VITE_API_BASE_URL`: Base URL of the deployed `booking-api` service (e.g., `https://<your-api>.azurewebsites.net`).
+- **Firebase Client Secrets** (injected at Vite build time):
+  - `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, and optionally `VITE_FIREBASE_MEASUREMENT_ID`.
+- **Domain Integration**:
+  - Add the Azure Static Web App hostname to **Firebase Console → Authentication → Settings → Authorized domains** (`officewho-53cec`).
+  - Add the Azure Static Web App origin to `booking-api` CORS allowed origins.
 
 ### Branch Protection (`main`)
 
@@ -101,4 +116,4 @@ Configure the following **exact job name** from `PR Checks` as the required stat
 
 ### Action Version Pinning
 
-Official and third-party GitHub Actions (`actions/checkout`, `actions/setup-dotnet`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `dorny/paths-filter`, `docker/setup-buildx-action`, `docker/build-push-action`) are pinned to current supported major versions and should be reviewed quarterly or upon security advisories.
+Official and third-party GitHub Actions (`actions/checkout`, `actions/setup-dotnet`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `dorny/paths-filter`, `docker/setup-buildx-action`, `docker/build-push-action`, `Azure/static-web-apps-deploy`) are pinned to current supported major versions and should be reviewed quarterly or upon security advisories.
