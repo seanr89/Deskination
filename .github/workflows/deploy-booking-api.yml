@@ -9,6 +9,9 @@ on:
       - '.github/workflows/deploy-booking-api.yml'
   workflow_dispatch:
 
+env:
+  DOTNET_VERSION: '10.0.x'
+
 permissions:
   contents: read
 
@@ -17,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
-    name: Build, Test & Publish (.NET 10)
+  build-and-test:
+    name: Build, Test & Package Backend API
     runs-on: ubuntu-latest
     env:
       DOTNET_NOLOGO: 'true'
@@ -26,13 +29,13 @@ jobs:
       NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v7
 
       - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -47,13 +50,14 @@ jobs:
           dotnet restore src/services/booking-api/booking-api.csproj
           dotnet restore src/services/booking-api.Tests/BookingApi.Tests.csproj
 
-      - name: Build and test Booking API
+      - name: Run Backend Tests
         run: >
           dotnet test src/services/booking-api.Tests/BookingApi.Tests.csproj
           --no-restore
           -c Release
+          --verbosity normal
 
-      - name: Publish Release output
+      - name: Publish API
         run: >
           dotnet publish src/services/booking-api/booking-api.csproj
           --no-restore
@@ -61,46 +65,33 @@ jobs:
           -o ./publish
           /p:UseAppHost=false
 
-      - name: Upload published package artifact
+      - name: Upload Artifact for Deployment
         uses: actions/upload-artifact@v7
         with:
           name: booking-api-publish
           path: ./publish
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
 
   deploy:
-    name: Deploy to Azure App Service
-    needs: build-and-publish
+    name: Deploy to Azure Web App
+    needs: build-and-test
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    environment:
-      name: production
-      url: ${{ steps.deploy-webapp.outputs.webapp-url }}
 
     steps:
-      - name: Download published package artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: booking-api-publish
-          path: ./publish
-
-      - name: Check Azure OIDC and App Service configuration
-        id: check-config
+      - name: Check Azure Web App Configuration & Publish Profile
+        id: check-profile
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
-          AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME || vars.AZURE_WEBAPP_NAME }}
+          AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME }}
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
           missing=()
-          for var in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_WEBAPP_NAME; do
-            if [ -z "${!var}" ]; then
-              missing+=("$var")
-            fi
-          done
+          if [ -z "${AZURE_WEBAPP_NAME}" ]; then
+            missing+=("AZURE_WEBAPP_NAME")
+          fi
+          if [ -z "${AZURE_WEBAPP_PUBLISH_PROFILE}" ]; then
+            missing+=("AZURE_WEBAPP_PUBLISH_PROFILE")
+          fi
 
           if [ ${#missing[@]} -gt 0 ]; then
             echo "can_deploy=false" >> "$GITHUB_OUTPUT"
@@ -109,19 +100,18 @@ jobs:
             echo "can_deploy=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Log in to Azure (OIDC)
-        if: steps.check-config.outputs.can_deploy == 'true'
-        uses: azure/login@v2
+      - name: Download Build Artifact
+        if: steps.check-profile.outputs.can_deploy == 'true'
+        uses: actions/download-artifact@v7
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          name: booking-api-publish
+          path: ./publish
 
-      - name: Deploy to Azure App Service
+      - name: Deploy to Azure Web App
         id: deploy-webapp
-        if: steps.check-config.outputs.can_deploy == 'true'
+        if: steps.check-profile.outputs.can_deploy == 'true'
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME || vars.AZURE_WEBAPP_NAME }}
-          slot-name: ${{ vars.AZURE_WEBAPP_SLOT_NAME || secrets.AZURE_WEBAPP_SLOT_NAME || 'production' }}
+          app-name: ${{ vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: ./publish
