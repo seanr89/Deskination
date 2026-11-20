@@ -1,0 +1,130 @@
+name: Frontend Deploy (Azure Static Web Apps)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/clients/desk-ui/**"
+      - ".github/workflows/deploy-desk-ui.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: ["main"]
+    paths:
+      - "src/clients/desk-ui/**"
+      - ".github/workflows/deploy-desk-ui.yml"
+  workflow_dispatch:
+
+env:
+  APP_LOCATION: "src/clients/desk-ui"
+  OUTPUT_LOCATION: "dist"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+
+jobs:
+  test-and-validate:
+    name: Test & Lint Quality Gate
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/clients/desk-ui
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: src/clients/desk-ui/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Type-check TypeScript
+        run: npm run lint
+
+      - name: Run Frontend Tests (Vitest)
+        run: npm test
+
+  build-and-deploy:
+    name: Build & Deploy to Azure Static Web Apps
+    needs: test-and-validate
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Check Deployment Token Availability
+        id: check-token
+        env:
+          AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        run: |
+          if [ -z "${AZURE_STATIC_WEB_APPS_API_TOKEN}" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::AZURE_STATIC_WEB_APPS_API_TOKEN secret is not set. Deployment will be skipped."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and Deploy to Azure Static Web Apps
+        if: steps.check-token.outputs.has_token == 'true'
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: ${{ env.APP_LOCATION }}
+          output_location: ${{ env.OUTPUT_LOCATION }}
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || secrets.VITE_API_BASE_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+
+  close-pull-request:
+    name: Close Pull Request Preview Environment
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check Deployment Token Availability
+        id: check-token
+        env:
+          AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        run: |
+          if [ -z "${AZURE_STATIC_WEB_APPS_API_TOKEN}" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::AZURE_STATIC_WEB_APPS_API_TOKEN secret is not set. Preview cleanup will be skipped."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Close Preview Environment
+        if: steps.check-token.outputs.has_token == 'true'
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: "close"
