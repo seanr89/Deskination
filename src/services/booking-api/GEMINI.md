@@ -20,11 +20,11 @@
    - `ResolveWorkspaceUserAsync` matches callers against `db.Users` by email or `usr-{uid}` and synthesizes a fallback `User` if not yet persisted.
 3. **Persistence, Rules & Seeding (`Data/`)**:
    - `DeskinationDbContext.cs` stores `Location.Floors`, `Desk.Equipment`, and `Desk.Position` as camelCase JSON strings via EF Core `ValueConverter`/`ValueComparer`, and converts enums to strings.
-   - `DatabaseConfigurationExtensions.AddDeskinationDatabase` probes `ConnectionStrings:DefaultConnection` via a 350ms TCP check and falls back to `UseInMemoryDatabase` (`DeskinationWorkspaceDb`) unless `Database:Provider` is explicitly `"InMemory"`.
+   - `DatabaseConfigurationExtensions.AddDeskinationDatabase` probes `ConnectionStrings:DefaultConnection` via a 350ms TCP check and falls back to `UseInMemoryDatabase` (`DeskinationWorkspaceDb`) unless `Database:Provider` is explicitly `"InMemory"` or `"PostgreSQL"` (`"Postgres"` / `"Npgsql"`).
    - `BookingDomainRules` centralizes `SlotsOverlap`, `IsActiveBooking`, `ComputeDeskAvailability`, and `ComputeUserStats`.
    - `DeskinationSeeder.EnsureSeededAsync` seeds empty tables on startup; `ResetToDefaultsAsync` powers `POST /api/workspace/reset`.
 4. **Minimal API Endpoint Groups (`Endpoints/` + `Program.cs`)**:
-   - `Program.cs`: `GET /api/health` (unauthenticated status, provider, and entity counts) + CORS policy `"DeskUiClient"` (`http://localhost:3000`, `http://localhost:5173`).
+   - `Program.cs`: `UseForwardedHeaders()` (`X-Forwarded-For` / `X-Forwarded-Proto`), `GET /api/health` (unauthenticated status, provider, and entity counts), and CORS policy `"DeskUiClient"` resolved from `Cors:AllowedOrigins` (defaulting to `http://localhost:3000`, `http://localhost:5173`).
    - `AuthEndpoints.cs`: `/api/auth` (`/status`, `/me`, `/admin-check`).
    - `UsersEndpoints.cs`: `/api/users` (list, `/me` GET/PUT, `/{id}`, `/` POST, `/{id}/stats`).
    - `LocationsEndpoints.cs`: `/api/locations` (CRUD, `/{locationId}/floors/{floorId}/elements`, `/{id}/occupancy`, `/{id}/colleagues`).

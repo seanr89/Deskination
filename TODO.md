@@ -44,8 +44,8 @@ Generated from a codebase review of `src/services/booking-api` and `src/clients/
 - [ ] **Silent fallback from PostgreSQL to InMemory database**
   - `DatabaseConfigurationExtensions.AddDeskinationDatabase` (`DeskinationDbContext.cs`) probes Postgres with a 350ms TCP timeout and silently falls back to `UseInMemoryDatabase` if unreachable, which can mask database misconfiguration in non-local environments.
 
-- [ ] **Hardcoded CORS origins in `Program.cs`**
-  - `Program.cs` hardcodes `http://localhost:3000` and `http://localhost:5173` instead of reading allowed origins from `IConfiguration`.
+- [x] **Hardcoded CORS origins in `Program.cs`**
+  - Resolved via `Program.ResolveCorsAllowedOrigins` reading `Cors:AllowedOrigins` (scalar or array configuration) with default fallback to `http://localhost:3000` and `http://localhost:5173`.
 
 - [ ] **Monolithic `DeskBookingContext.tsx` (922 lines)**
   - Hydration, auth subscription, optimistic state, CRUD actions, availability logic, and analytics all live in a single context file; splitting into smaller hooks/modules would improve maintainability.
