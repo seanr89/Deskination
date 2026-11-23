@@ -4,6 +4,7 @@ using System.Text.Json;
 using BookingApi.Data;
 using BookingApi.Models;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace BookingApi.Tests;
@@ -424,5 +425,284 @@ public sealed class BookingApiIntegrationTests
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("healthy", payload.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task LocationOccupancyAndColleagues_ExcludeRejectedAndCancelledBookings_AndDefaultToTodayUtc()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var employeeClient = factory.CreateAuthenticatedClient(
+            email: "sarah.chen@acme-corp.internal",
+            role: "employee");
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+
+        const string testDate = "2026-12-01";
+
+        // 1. Create a pending approval request on desk-ldn-420 and reject it
+        var pendingRes = await employeeClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                DeskId: "desk-ldn-420",
+                Date: testDate,
+                Slot: SlotType.FullDay,
+                ApprovalReason: "Rejected booking occupancy check"
+            ),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Created, pendingRes.StatusCode);
+        var pendingBooking = (await pendingRes.Content.ReadFromJsonAsync<BookingActionResponse>(JsonOptions))!.Booking!;
+
+        var rejectRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/reject",
+            new RejectBookingRequest("Not available"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
+
+        // 2. Occupancy and colleagues on testDate must exclude the rejected booking
+        var occupancyRes = await employeeClient.GetFromJsonAsync<LocationOccupancyResponse>(
+            $"/api/locations/loc-london/occupancy?date={testDate}",
+            JsonOptions);
+        Assert.NotNull(occupancyRes);
+        Assert.Equal(0, occupancyRes.Booked);
+        Assert.Equal(0, occupancyRes.Rate);
+
+        var colleaguesRes = await employeeClient.GetFromJsonAsync<List<Booking>>(
+            $"/api/locations/loc-london/colleagues?date={testDate}",
+            JsonOptions);
+        Assert.NotNull(colleaguesRes);
+        Assert.Empty(colleaguesRes);
+
+        // 3. When date is omitted, endpoints use today's UTC date rather than hardcoded "2026-10-25"
+        var todayUtc = BookingDomainRules.GetTodayUtcDateString();
+        if (todayUtc != "2026-10-25")
+        {
+            var defaultColleagues = await employeeClient.GetFromJsonAsync<List<Booking>>(
+                "/api/locations/loc-london/colleagues",
+                JsonOptions);
+            Assert.NotNull(defaultColleagues);
+            Assert.DoesNotContain(defaultColleagues, b => b.Date == "2026-10-25");
+
+            var defaultAvail = await employeeClient.GetFromJsonAsync<SlotAvailability>(
+                "/api/desks/desk-ldn-401/availability",
+                JsonOptions);
+            Assert.NotNull(defaultAvail);
+            Assert.True(defaultAvail.FullDay);
+        }
+    }
+
+    [Fact]
+    public async Task PutUsersMe_PreventsRoleElevationWhenEmployeeSpoofsAdminEmailOrId()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var attackerClient = factory.CreateAuthenticatedClient(
+            email: "attacker.user@acme-corp.internal",
+            role: "employee",
+            uid: "uid-attacker-777",
+            displayName: "Attacker User");
+
+        // Attempt to match seeded admin Elena Rostova by supplying her Id, Email, and Admin role in the body
+        var spoofedRequest = new UpsertUserRequest(
+            Id: "usr-admin-elena",
+            Name: "Spoofed Admin",
+            Email: "elena.rostova@acme-corp.internal",
+            Role: Role.Admin,
+            Department: "Workplace Operations",
+            JobTitle: "Fake Admin"
+        );
+
+        var response = await attackerClient.PutAsJsonAsync("/api/users/me", spoofedRequest, JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var profile = await response.Content.ReadFromJsonAsync<User>(JsonOptions);
+        Assert.NotNull(profile);
+        Assert.Equal("usr-uid-attacker-777", profile.Id);
+        Assert.Equal("attacker.user@acme-corp.internal", profile.Email);
+        Assert.Equal(Role.Employee, profile.Role);
+
+        // Verify seeded admin Elena Rostova was not overwritten
+        var elenaRes = await attackerClient.GetFromJsonAsync<User>("/api/users/usr-admin-elena", JsonOptions);
+        Assert.NotNull(elenaRes);
+        Assert.Equal("Elena Rostova", elenaRes.Name);
+        Assert.Equal("elena.rostova@acme-corp.internal", elenaRes.Email);
+        Assert.Equal(Role.Admin, elenaRes.Role);
+    }
+
+    [Fact]
+    public async Task BookingStatusTransitions_EnforceValidSourceStatusesAndApproveSlotConflicts()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var sarahClient = factory.CreateAuthenticatedClient(
+            email: "sarah.chen@acme-corp.internal",
+            role: "employee");
+        using var marcusClient = factory.CreateAuthenticatedClient(
+            email: "marcus.vance@acme-corp.internal",
+            role: "employee");
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+
+        const string testDate = "2026-12-03";
+
+        // 1. Create a pending_approval request (Morning on desk-ldn-420)
+        var pendingCreate = await sarahClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                DeskId: "desk-ldn-420",
+                Date: testDate,
+                Slot: SlotType.Morning,
+                ApprovalReason: "Morning workshop"
+            ),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Created, pendingCreate.StatusCode);
+        var pendingBooking = (await pendingCreate.Content.ReadFromJsonAsync<BookingActionResponse>(JsonOptions))!.Booking!;
+
+        // Cannot check-in to a pending_approval booking
+        var invalidPendingCheckIn = await sarahClient.PostAsync($"/api/bookings/{pendingBooking.Id}/check-in", null);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPendingCheckIn.StatusCode);
+
+        // 2. Reject the pending booking, then verify re-rejecting, approving, cancelling, or checking in fails with 400
+        var rejectRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/reject",
+            new RejectBookingRequest("Declined"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
+
+        var reRejectRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/reject",
+            new RejectBookingRequest("Declined again"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.BadRequest, reRejectRes.StatusCode);
+
+        var approveRejectedRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/approve",
+            new ApproveBookingRequest("Try approving rejected"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.BadRequest, approveRejectedRes.StatusCode);
+
+        var cancelRejectedRes = await sarahClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/cancel",
+            new CancelBookingRequest("Try cancelling rejected"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.BadRequest, cancelRejectedRes.StatusCode);
+
+        var checkInRejectedRes = await sarahClient.PostAsync($"/api/bookings/{pendingBooking.Id}/check-in", null);
+        Assert.Equal(HttpStatusCode.BadRequest, checkInRejectedRes.StatusCode);
+
+        // 3. Create a confirmed booking, check in once (200), verify second check-in fails (400),
+        //    cancel once (200), and verify second cancel fails (400) without duplicating notes
+        var confirmedCreate = await sarahClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                DeskId: "desk-ldn-401",
+                Date: testDate,
+                Slot: SlotType.FullDay,
+                Notes: "Initial note"
+            ),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Created, confirmedCreate.StatusCode);
+        var confirmedBooking = (await confirmedCreate.Content.ReadFromJsonAsync<BookingActionResponse>(JsonOptions))!.Booking!;
+
+        // Approving an already Confirmed booking fails with 400
+        var approveConfirmedRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{confirmedBooking.Id}/approve",
+            new ApproveBookingRequest("Already confirmed"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.BadRequest, approveConfirmedRes.StatusCode);
+
+        var firstCheckIn = await sarahClient.PostAsync($"/api/bookings/{confirmedBooking.Id}/check-in", null);
+        Assert.Equal(HttpStatusCode.OK, firstCheckIn.StatusCode);
+
+        var secondCheckIn = await sarahClient.PostAsync($"/api/bookings/{confirmedBooking.Id}/check-in", null);
+        Assert.Equal(HttpStatusCode.BadRequest, secondCheckIn.StatusCode);
+
+        var firstCancel = await sarahClient.PostAsJsonAsync(
+            $"/api/bookings/{confirmedBooking.Id}/cancel",
+            new CancelBookingRequest("First cancel reason"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, firstCancel.StatusCode);
+
+        var secondCancel = await sarahClient.PostAsJsonAsync(
+            $"/api/bookings/{confirmedBooking.Id}/cancel",
+            new CancelBookingRequest("Duplicate cancel reason"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.BadRequest, secondCancel.StatusCode);
+
+        // 4. Approve slot conflict check:
+        //    Marcus submits a pending Morning request on desk-ldn-420 for 2026-12-04,
+        //    and also books confirmed Morning on desk-ldn-401 for 2026-12-04 after cancelling/or via another user conflict
+        const string conflictDate = "2026-12-04";
+        var marcusPendingRes = await marcusClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                DeskId: "desk-ldn-420",
+                Date: conflictDate,
+                Slot: SlotType.Morning,
+                ApprovalReason: "Morning client call"
+            ),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Created, marcusPendingRes.StatusCode);
+        var marcusPending = (await marcusPendingRes.Content.ReadFromJsonAsync<BookingActionResponse>(JsonOptions))!.Booking!;
+
+        // Admin books Afternoon on desk-ldn-420, then updates it to FullDay? No, PUT checks active conflicts.
+        // Instead, Sarah submits an Afternoon booking on desk-ldn-402, and Marcus books Afternoon on desk-ldn-401,
+        // then we test user/desk conflict when Marcus's pending booking is updated or when another booking conflicts.
+        // Wait: if Marcus cancels marcusPending? No, if marcusPending is PendingApproval, how can a desk conflict arise?
+        // Admin creates a new booking or updates an inactive booking? Wait: PUT /api/bookings/{id} only checked conflicts when targetSlot != existing.Slot && IsActiveBooking(existing.Status)!
+        // Or in a test we can seed/create an overlapping booking via DbContext to simulate concurrent booking creation before approval!
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DeskinationDbContext>();
+            db.Bookings.Add(new Booking(
+                Id: "bkg-concurrent-conflict",
+                DeskId: "desk-ldn-420",
+                DeskCode: "LDN-420",
+                DeskName: "Desk 420",
+                LocationId: "loc-london",
+                LocationName: "London HQ",
+                FloorId: "flr-ldn-4",
+                FloorName: "Level 4",
+                UserId: "usr-sarah",
+                UserName: "Sarah Chen",
+                UserEmail: "sarah.chen@acme-corp.internal",
+                UserDepartment: "Frontend Engineering",
+                Date: conflictDate,
+                Slot: SlotType.FullDay,
+                Status: BookingStatus.Confirmed,
+                CreatedAt: DateTimeOffset.UtcNow.ToString("O")
+            ));
+            await db.SaveChangesAsync();
+        }
+
+        var approveConflictRes = await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{marcusPending.Id}/approve",
+            new ApproveBookingRequest("Should conflict with concurrent booking"),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Conflict, approveConflictRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteDesk_CascadesDeletionToAssociatedBookings()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+
+        // Verify desk-ldn-404 has seeded bookings prior to deletion
+        var beforeBookings = await adminClient.GetFromJsonAsync<List<Booking>>(
+            "/api/bookings?deskId=desk-ldn-404",
+            JsonOptions);
+        Assert.NotNull(beforeBookings);
+        Assert.NotEmpty(beforeBookings);
+
+        var deleteRes = await adminClient.DeleteAsync("/api/desks/desk-ldn-404");
+        Assert.Equal(HttpStatusCode.NoContent, deleteRes.StatusCode);
+
+        var afterBookings = await adminClient.GetFromJsonAsync<List<Booking>>(
+            "/api/bookings?deskId=desk-ldn-404",
+            JsonOptions);
+        Assert.NotNull(afterBookings);
+        Assert.Empty(afterBookings);
     }
 }

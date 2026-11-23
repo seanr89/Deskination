@@ -341,6 +341,11 @@ public static class BookingsEndpoints
                 return Results.Forbid();
             }
 
+            if (existing.Status != BookingStatus.Confirmed)
+            {
+                return Results.BadRequest(new { message = $"Only confirmed bookings can be checked into (current status: {existing.Status})." });
+            }
+
             var updated = existing with
             {
                 Status = BookingStatus.CheckedIn,
@@ -362,10 +367,45 @@ public static class BookingsEndpoints
             ClaimsPrincipal principal,
             DeskinationDbContext db) =>
         {
+            await using var tx = await db.Database.BeginTransactionAsync();
+
             var existing = await db.Bookings.FindAsync(id);
             if (existing is null)
             {
                 return Results.NotFound(new { message = $"Booking '{id}' not found." });
+            }
+
+            if (existing.Status != BookingStatus.PendingApproval)
+            {
+                return Results.BadRequest(new { message = $"Only pending_approval bookings can be approved (current status: {existing.Status})." });
+            }
+
+            var otherDeskBookings = await db.Bookings
+                .AsNoTracking()
+                .Where(b => b.DeskId == existing.DeskId && b.Date == existing.Date && b.Id != existing.Id)
+                .ToListAsync();
+
+            var hasDeskConflict = otherDeskBookings
+                .Where(b => BookingDomainRules.IsActiveBooking(b.Status))
+                .Any(b => BookingDomainRules.SlotsOverlap(b.Slot, existing.Slot));
+
+            if (hasDeskConflict)
+            {
+                return Results.Conflict(new { message = "Requested time slot conflicts with an existing booking on this desk." });
+            }
+
+            var otherUserBookings = await db.Bookings
+                .AsNoTracking()
+                .Where(b => b.UserId == existing.UserId && b.Date == existing.Date && b.Id != existing.Id)
+                .ToListAsync();
+
+            var hasUserConflict = otherUserBookings
+                .Where(b => BookingDomainRules.IsActiveBooking(b.Status))
+                .Any(b => BookingDomainRules.SlotsOverlap(b.Slot, existing.Slot));
+
+            if (hasUserConflict)
+            {
+                return Results.Conflict(new { message = "User already has an active overlapping booking on this date." });
             }
 
             var caller = await principal.ResolveWorkspaceUserAsync(db);
@@ -382,6 +422,7 @@ public static class BookingsEndpoints
             db.Entry(existing).State = EntityState.Detached;
             db.Bookings.Update(updated);
             await db.SaveChangesAsync();
+            await tx.CommitAsync();
 
             return Results.Ok(updated);
         })
@@ -399,6 +440,11 @@ public static class BookingsEndpoints
             if (existing is null)
             {
                 return Results.NotFound(new { message = $"Booking '{id}' not found." });
+            }
+
+            if (existing.Status != BookingStatus.PendingApproval)
+            {
+                return Results.BadRequest(new { message = $"Only pending_approval bookings can be rejected (current status: {existing.Status})." });
             }
 
             var caller = await principal.ResolveWorkspaceUserAsync(db);
@@ -441,6 +487,11 @@ public static class BookingsEndpoints
         if (caller.Role != Role.Admin && !string.Equals(existing.UserId, caller.Id, StringComparison.OrdinalIgnoreCase))
         {
             return Results.Forbid();
+        }
+
+        if (!BookingDomainRules.IsActiveBooking(existing.Status))
+        {
+            return Results.BadRequest(new { message = $"Booking '{id}' cannot be cancelled because its status is already '{existing.Status}'." });
         }
 
         var updatedNotes = !string.IsNullOrWhiteSpace(reason)

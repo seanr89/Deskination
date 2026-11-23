@@ -6,26 +6,26 @@ Generated from a codebase review of `src/services/booking-api` and `src/clients/
 
 ## Bugs
 
-- [ ] **Occupancy & colleague queries include `rejected` bookings**
+- [x] **Occupancy & colleague queries include `rejected` bookings**
   - `src/services/booking-api/Endpoints/LocationsEndpoints.cs` (`GetLocationOccupancy`, `GetColleaguesInOffice`) only filter `b.Status != BookingStatus.Cancelled`, missing `BookingStatus.Rejected` (unlike `BookingDomainRules.IsActiveBooking`).
   - `src/clients/desk-ui/src/context/DeskBookingContext.tsx` (`getLocationOccupancy`, `getColleaguesInOfficeToday`) has the same bug (`b.status !== 'cancelled'`).
 
-- [ ] **Hardcoded fallback date `"2026-10-25"` in API domain rules & endpoints**
+- [x] **Hardcoded fallback date `"2026-10-25"` in API domain rules & endpoints**
   - `BookingDomainRules.ComputeUserStats` (`src/services/booking-api/Data/DeskinationDbContext.cs`), `GetDeskAvailability` (`DesksEndpoints.cs`), and `GetLocationOccupancy` / `GetColleaguesInOffice` (`LocationsEndpoints.cs`) fall back to `"2026-10-25"` when `date` or `referenceDate` is omitted instead of using the current UTC date.
 
-- [ ] **Optimistic UI mutations do not roll back on API failure**
+- [x] **Optimistic UI mutations do not roll back on API failure**
   - In `src/clients/desk-ui/src/context/DeskBookingContext.tsx`, mutations (`bookDesk`, `requestDeskBooking`, `approveBookingRequest`, `rejectBookingRequest`, `deleteDesk`, `updateDeskPosition`, `batchUpdateDeskPositions`, `updateFloorElements`) update local state immediately and fire `void runAuthenticatedApi(...)` without reverting state if the API returns an error (e.g., `409 Conflict` or `403 Forbidden`).
   - `bookDesk` and `requestDeskBooking` also return `{ success: true }` synchronously before the backend transaction completes.
 
-- [ ] **Missing booking status transition guards in `BookingsEndpoints.cs`**
+- [x] **Missing booking status transition guards in `BookingsEndpoints.cs`**
   - `POST /api/bookings/{id}/check-in` does not verify the booking is `Confirmed` (allows checking into `Cancelled`, `Rejected`, or `PendingApproval` bookings).
   - `POST /api/bookings/{id}/approve` and `POST /api/bookings/{id}/reject` do not verify the booking is `PendingApproval`, and `approve` does not re-check for slot conflicts.
   - `CancelBookingInternalAsync` (`DELETE /api/bookings/{id}` and `POST /api/bookings/{id}/cancel`) allows cancelling already `Cancelled` or `Rejected` bookings and appends duplicate cancellation notes.
 
-- [ ] **Potential role elevation via `PUT /api/users/me`**
+- [x] **Potential role elevation via `PUT /api/users/me`**
   - `src/services/booking-api/Endpoints/UsersEndpoints.cs` (`UpsertCurrentUserProfile`) prefers `request.Email` over `principal.GetEmail()` and matches existing users by `request.Id` or email. A non-admin caller supplying an admin's email or ID in the request body can match the admin record and inherit `Role.Admin`.
 
-- [ ] **Orphaned bookings on desk deletion**
+- [x] **Orphaned bookings on desk deletion**
   - `DELETE /api/desks/{id}` (`src/services/booking-api/Endpoints/DesksEndpoints.cs`) deletes the desk without removing or cancelling associated `Booking` records (unlike `DELETE /api/locations/{id}`, which cascades).
 
 ---
