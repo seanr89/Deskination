@@ -168,18 +168,22 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
     setApiError(null);
   }, []);
 
-  const runAuthenticatedApi = useCallback(async <T,>(action: () => Promise<T>): Promise<T | null> => {
-    try {
-      const token = await getCurrentIdToken();
-      if (!token) return null;
-      const result = await action();
-      setApiError(null);
-      return result;
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : 'Failed to communicate with booking-api.');
-      return null;
-    }
-  }, []);
+  const runAuthenticatedApi = useCallback(
+    async <T,>(action: () => Promise<T>, onError?: () => void): Promise<T | null> => {
+      try {
+        const token = await getCurrentIdToken();
+        if (!token) return null;
+        const result = await action();
+        setApiError(null);
+        return result;
+      } catch (err) {
+        setApiError(err instanceof Error ? err.message : 'Failed to communicate with booking-api.');
+        onError?.();
+        return null;
+      }
+    },
+    []
+  );
 
   // Hydrate workspace state from booking-api whenever a Firebase session becomes active
   const hydrateFromBackend = useCallback(async () => {
@@ -352,20 +356,29 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       approvalReason: justification
     };
 
+    const rollbackRequest = () => {
+      setBookings(prev => prev.filter(b => b.id !== optimisticId));
+    };
+
     setBookings(prev => [newBooking, ...prev]);
 
-    void runAuthenticatedApi(() =>
-      createBookingApi({
-        deskId: targetDesk.id,
-        date,
-        slot,
-        notes: justification,
-        approvalReason: justification,
-        isApprovalRequest: true,
-      })
+    void runAuthenticatedApi(
+      () =>
+        createBookingApi({
+          deskId: targetDesk.id,
+          date,
+          slot,
+          notes: justification,
+          approvalReason: justification,
+          isApprovalRequest: true,
+        }),
+      rollbackRequest
     ).then(res => {
       if (res?.booking) {
         setBookings(prev => prev.map(b => (b.id === optimisticId ? res.booking! : b)));
+      } else if (res && !res.success) {
+        setApiError(res.message || 'Reservation request failed.');
+        rollbackRequest();
       }
     });
 
@@ -453,19 +466,28 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       notes
     };
 
+    const rollbackBooking = () => {
+      setBookings(prev => prev.filter(b => b.id !== optimisticId));
+    };
+
     setBookings(prev => [newBooking, ...prev]);
 
-    void runAuthenticatedApi(() =>
-      createBookingApi({
-        deskId: targetDesk.id,
-        date,
-        slot,
-        notes,
-        isApprovalRequest: false,
-      })
+    void runAuthenticatedApi(
+      () =>
+        createBookingApi({
+          deskId: targetDesk.id,
+          date,
+          slot,
+          notes,
+          isApprovalRequest: false,
+        }),
+      rollbackBooking
     ).then(res => {
       if (res?.booking) {
         setBookings(prev => prev.map(b => (b.id === optimisticId ? res.booking! : b)));
+      } else if (res && !res.success) {
+        setApiError(res.message || 'Desk booking failed.');
+        rollbackBooking();
       }
     });
 
@@ -474,6 +496,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
 
   // Manager Approve Request
   const approveBookingRequest = (bookingId: string, note?: string) => {
+    const previousBooking = bookings.find(b => b.id === bookingId);
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
@@ -487,7 +510,14 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return b;
     }));
 
-    void runAuthenticatedApi(() => approveBookingRequestApi(bookingId, note)).then(updated => {
+    void runAuthenticatedApi(
+      () => approveBookingRequestApi(bookingId, note),
+      () => {
+        if (previousBooking) {
+          setBookings(prev => prev.map(b => (b.id === bookingId ? previousBooking : b)));
+        }
+      }
+    ).then(updated => {
       if (updated) {
         setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
       }
@@ -498,6 +528,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
 
   // Manager Reject Request
   const rejectBookingRequest = (bookingId: string, reason: string) => {
+    const previousBooking = bookings.find(b => b.id === bookingId);
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
@@ -511,7 +542,14 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return b;
     }));
 
-    void runAuthenticatedApi(() => rejectBookingRequestApi(bookingId, reason)).then(updated => {
+    void runAuthenticatedApi(
+      () => rejectBookingRequestApi(bookingId, reason),
+      () => {
+        if (previousBooking) {
+          setBookings(prev => prev.map(b => (b.id === bookingId ? previousBooking : b)));
+        }
+      }
+    ).then(updated => {
       if (updated) {
         setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
       }
@@ -529,6 +567,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
     designatedDepartment?: string, 
     requiresApproval?: boolean
   ) => {
+    const previousDesk = desks.find(d => d.id === deskId);
     setDesks(prev => prev.map(d => {
       if (d.id === deskId) {
         return {
@@ -543,14 +582,20 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return d;
     }));
 
-    void runAuthenticatedApi(() =>
-      updateDeskAllocationApi(deskId, {
-        allocationType,
-        designatedUserId,
-        designatedUserName,
-        designatedDepartment,
-        requiresApproval,
-      })
+    void runAuthenticatedApi(
+      () =>
+        updateDeskAllocationApi(deskId, {
+          allocationType,
+          designatedUserId,
+          designatedUserName,
+          designatedDepartment,
+          requiresApproval,
+        }),
+      () => {
+        if (previousDesk) {
+          setDesks(prev => prev.map(d => (d.id === deskId ? previousDesk : d)));
+        }
+      }
     ).then(updated => {
       if (updated) {
         setDesks(prev => prev.map(d => (d.id === deskId ? updated : d)));
@@ -560,6 +605,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
 
   // Cancel booking
   const cancelBooking = (bookingId: string, reason?: string) => {
+    const previousBooking = bookings.find(b => b.id === bookingId);
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
@@ -572,7 +618,14 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return b;
     }));
 
-    void runAuthenticatedApi(() => cancelBookingApi(bookingId, reason)).then(updated => {
+    void runAuthenticatedApi(
+      () => cancelBookingApi(bookingId, reason),
+      () => {
+        if (previousBooking) {
+          setBookings(prev => prev.map(b => (b.id === bookingId ? previousBooking : b)));
+        }
+      }
+    ).then(updated => {
       if (updated) {
         setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
       }
@@ -583,6 +636,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
 
   // Check-in booking
   const checkInBooking = (bookingId: string) => {
+    const previousBooking = bookings.find(b => b.id === bookingId);
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
@@ -594,7 +648,14 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return b;
     }));
 
-    void runAuthenticatedApi(() => checkInBookingApi(bookingId)).then(updated => {
+    void runAuthenticatedApi(
+      () => checkInBookingApi(bookingId),
+      () => {
+        if (previousBooking) {
+          setBookings(prev => prev.map(b => (b.id === bookingId ? previousBooking : b)));
+        }
+      }
+    ).then(updated => {
       if (updated) {
         setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
       }
@@ -611,7 +672,12 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
     };
     setLocations(prev => [...prev, newLoc]);
 
-    void runAuthenticatedApi(() => createLocationApi(newLoc)).then(created => {
+    void runAuthenticatedApi(
+      () => createLocationApi(newLoc),
+      () => {
+        setLocations(prev => prev.filter(l => l.id !== newLoc.id));
+      }
+    ).then(created => {
       if (created) {
         setLocations(prev => prev.map(l => (l.id === newLoc.id ? created : l)));
       }
@@ -621,9 +687,17 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
   };
 
   const updateLocation = (updated: Location) => {
+    const previousLocation = locations.find(l => l.id === updated.id);
     setLocations(prev => prev.map(l => l.id === updated.id ? updated : l));
 
-    void runAuthenticatedApi(() => updateLocationApi(updated)).then(saved => {
+    void runAuthenticatedApi(
+      () => updateLocationApi(updated),
+      () => {
+        if (previousLocation) {
+          setLocations(prev => prev.map(l => (l.id === updated.id ? previousLocation : l)));
+        }
+      }
+    ).then(saved => {
       if (saved) {
         setLocations(prev => prev.map(l => (l.id === saved.id ? saved : l)));
       }
@@ -631,6 +705,12 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
   };
 
   const deleteLocation = (id: string) => {
+    const previousLocations = locations;
+    const previousDesks = desks;
+    const previousBookings = bookings;
+    const previousLocationId = currentLocationId;
+    const previousFloorId = currentFloorId;
+
     setLocations(prev => prev.filter(l => l.id !== id));
     setDesks(prev => prev.filter(d => d.locationId !== id));
     setBookings(prev => prev.filter(b => b.locationId !== id));
@@ -641,7 +721,16 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       }
     }
 
-    void runAuthenticatedApi(() => deleteLocationApi(id));
+    void runAuthenticatedApi(
+      () => deleteLocationApi(id),
+      () => {
+        setLocations(previousLocations);
+        setDesks(previousDesks);
+        setBookings(previousBookings);
+        setCurrentLocationId(previousLocationId);
+        setCurrentFloorId(previousFloorId);
+      }
+    );
   };
 
   // Admin Desk management
@@ -652,7 +741,12 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
     };
     setDesks(prev => [...prev, newDesk]);
 
-    void runAuthenticatedApi(() => createDeskApi(newDesk)).then(created => {
+    void runAuthenticatedApi(
+      () => createDeskApi(newDesk),
+      () => {
+        setDesks(prev => prev.filter(d => d.id !== newDesk.id));
+      }
+    ).then(created => {
       if (created) {
         setDesks(prev => prev.map(d => (d.id === newDesk.id ? created : d)));
       }
@@ -662,9 +756,17 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
   };
 
   const updateDesk = (updated: Desk) => {
+    const previousDesk = desks.find(d => d.id === updated.id);
     setDesks(prev => prev.map(d => d.id === updated.id ? updated : d));
 
-    void runAuthenticatedApi(() => updateDeskApi(updated)).then(saved => {
+    void runAuthenticatedApi(
+      () => updateDeskApi(updated),
+      () => {
+        if (previousDesk) {
+          setDesks(prev => prev.map(d => (d.id === updated.id ? previousDesk : d)));
+        }
+      }
+    ).then(saved => {
       if (saved) {
         setDesks(prev => prev.map(d => (d.id === saved.id ? saved : d)));
       }
@@ -672,12 +774,22 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
   };
 
   const deleteDesk = (id: string) => {
+    const previousDesks = desks;
+    const previousBookings = bookings;
     setDesks(prev => prev.filter(d => d.id !== id));
-    void runAuthenticatedApi(() => deleteDeskApi(id));
+    setBookings(prev => prev.filter(b => b.deskId !== id));
+    void runAuthenticatedApi(
+      () => deleteDeskApi(id),
+      () => {
+        setDesks(previousDesks);
+        setBookings(previousBookings);
+      }
+    );
   };
 
   // Layout editing methods
   const updateDeskPosition = (deskId: string, position: { x: number; y: number }, rotation?: number) => {
+    const previousDesk = desks.find(d => d.id === deskId);
     setDesks(prev => prev.map(d => {
       if (d.id === deskId) {
         return {
@@ -689,7 +801,14 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return d;
     }));
 
-    void runAuthenticatedApi(() => updateDeskPositionApi(deskId, position, rotation)).then(saved => {
+    void runAuthenticatedApi(
+      () => updateDeskPositionApi(deskId, position, rotation),
+      () => {
+        if (previousDesk) {
+          setDesks(prev => prev.map(d => (d.id === deskId ? previousDesk : d)));
+        }
+      }
+    ).then(saved => {
       if (saved) {
         setDesks(prev => prev.map(d => (d.id === deskId ? saved : d)));
       }
@@ -697,6 +816,7 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
   };
 
   const batchUpdateDeskPositions = (updates: { id: string; position: { x: number; y: number }; rotation?: number }[]) => {
+    const previousDesks = desks;
     const updateMap = new Map(updates.map(u => [u.id, u]));
     setDesks(prev => prev.map(d => {
       const match = updateMap.get(d.id);
@@ -710,10 +830,16 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return d;
     }));
 
-    void runAuthenticatedApi(() => batchUpdateDeskPositionsApi(updates));
+    void runAuthenticatedApi(
+      () => batchUpdateDeskPositionsApi(updates),
+      () => {
+        setDesks(previousDesks);
+      }
+    );
   };
 
   const updateFloorElements = (locationId: string, floorId: string, elements: FloorElement[]) => {
+    const previousLocations = locations;
     setLocations(prev => prev.map(loc => {
       if (loc.id === locationId) {
         return {
@@ -729,7 +855,12 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
       return loc;
     }));
 
-    void runAuthenticatedApi(() => updateFloorElementsApi(locationId, floorId, elements));
+    void runAuthenticatedApi(
+      () => updateFloorElementsApi(locationId, floorId, elements),
+      () => {
+        setLocations(previousLocations);
+      }
+    );
   };
 
   // Calculate User Stats
@@ -810,7 +941,13 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
 
     const bookedDeskIds = new Set(
       bookings
-        .filter(b => b.locationId === locationId && b.date === date && b.status !== 'cancelled')
+        .filter(
+          b =>
+            b.locationId === locationId &&
+            b.date === date &&
+            b.status !== 'cancelled' &&
+            b.status !== 'rejected'
+        )
         .map(b => b.deskId)
     );
 
@@ -825,7 +962,8 @@ export const DeskBookingProvider: React.FC<DeskBookingProviderProps> = ({
     return bookings.filter(b => 
       b.locationId === locationId && 
       b.date === date && 
-      b.status !== 'cancelled'
+      b.status !== 'cancelled' &&
+      b.status !== 'rejected'
     );
   };
 

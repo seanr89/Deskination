@@ -6,7 +6,43 @@ import {
   useDeskBooking,
   type DeskBookingProviderProps,
 } from '../DeskBookingContext';
+import { getCurrentIdToken } from '../../services/authService';
+import {
+  createBookingApi,
+  approveBookingRequestApi,
+  deleteDeskApi,
+} from '../../services/apiClient';
 import type { Booking, Desk, Location, User } from '../../types/deskBooking';
+
+let activeStateCells: unknown[] | null = null;
+let stateCursor = 0;
+
+vi.mock('react', async importOriginal => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useState: <T,>(initial: T | (() => T)) => {
+      if (!activeStateCells) {
+        return actual.useState(initial);
+      }
+      const idx = stateCursor++;
+      if (idx >= activeStateCells.length) {
+        activeStateCells.push(
+          typeof initial === 'function' ? (initial as () => T)() : initial
+        );
+      }
+      const setState = (updater: T | ((prev: T) => T)) => {
+        if (!activeStateCells) return;
+        const current = activeStateCells[idx] as T;
+        activeStateCells[idx] =
+          typeof updater === 'function'
+            ? (updater as (prev: T) => T)(current)
+            : updater;
+      };
+      return [activeStateCells[idx] as T, setState] as const;
+    },
+  };
+});
 
 vi.mock('../../services/authService', () => ({
   getCurrentIdToken: vi.fn(async () => null),
@@ -390,7 +426,7 @@ describe('DeskBookingContext', () => {
   });
 
   describe('getLocationOccupancy', () => {
-    it('computes total, booked, and rounded rate ignoring maintenance desks and cancelled bookings', () => {
+    it('computes total, booked, and rounded rate ignoring maintenance desks and cancelled or rejected bookings', () => {
       const desks = [
         makeDesk({ id: 'd-1', locationId: 'loc-london', status: 'active' }),
         makeDesk({ id: 'd-2', locationId: 'loc-london', status: 'active' }),
@@ -403,8 +439,9 @@ describe('DeskBookingContext', () => {
         // Two split bookings on d-1 should count as 1 booked desk
         makeBooking({ id: 'b-1m', deskId: 'd-1', slot: 'morning', status: 'confirmed' }),
         makeBooking({ id: 'b-1a', deskId: 'd-1', slot: 'afternoon', status: 'checked_in' }),
-        // Cancelled booking on d-2 should be ignored
+        // Cancelled and rejected bookings on d-2 and d-3 should be ignored
         makeBooking({ id: 'b-2c', deskId: 'd-2', slot: 'full_day', status: 'cancelled' }),
+        makeBooking({ id: 'b-3r', deskId: 'd-3', slot: 'full_day', status: 'rejected' }),
         // Different date should be ignored
         makeBooking({ id: 'b-3d', deskId: 'd-3', date: '2026-11-16', status: 'confirmed' }),
       ];
@@ -596,11 +633,12 @@ describe('DeskBookingContext', () => {
   });
 
   describe('getColleaguesInOfficeToday', () => {
-    it('returns non-cancelled bookings matching the specified locationId and date', () => {
+    it('returns non-cancelled and non-rejected bookings matching the specified locationId and date', () => {
       const bookings = [
         makeBooking({ id: 'c1', locationId: 'loc-london', date: '2026-11-15', status: 'confirmed' }),
         makeBooking({ id: 'c2', locationId: 'loc-london', date: '2026-11-15', status: 'checked_in' }),
         makeBooking({ id: 'c3', locationId: 'loc-london', date: '2026-11-15', status: 'cancelled' }),
+        makeBooking({ id: 'c3-rej', locationId: 'loc-london', date: '2026-11-15', status: 'rejected' }),
         makeBooking({ id: 'c4', locationId: 'loc-london', date: '2026-11-16', status: 'confirmed' }),
         makeBooking({ id: 'c5', locationId: 'loc-belfast', date: '2026-11-15', status: 'confirmed' }),
       ];
@@ -784,6 +822,94 @@ describe('DeskBookingContext', () => {
       expect(afternoonBooking.success).toBe(true);
       expect(afternoonBooking.booking?.locationName).toBe(londonLocation.name);
       expect(afternoonBooking.booking?.floorName).toBe(londonLocation.floors[0].name);
+    });
+  });
+
+  describe('optimistic mutation rollback & desk deletion cascade', () => {
+    afterEach(() => {
+      activeStateCells = null;
+      stateCursor = 0;
+    });
+
+    function createStatefulHarness(props: Omit<DeskBookingProviderProps, 'children'>) {
+      activeStateCells = [];
+      const renderPass = () => {
+        stateCursor = 0;
+        return renderProviderAndCapture(props);
+      };
+      return { renderPass };
+    }
+
+    it('rolls back optimistic bookDesk and approveBookingRequest mutations when the API fails', async () => {
+      vi.mocked(getCurrentIdToken).mockResolvedValue('mock-jwt-token');
+      vi.mocked(createBookingApi).mockRejectedValueOnce(new Error('409 Conflict: Slot taken'));
+      vi.mocked(approveBookingRequestApi).mockRejectedValueOnce(new Error('409 Conflict: Approval conflict'));
+
+      const desk = makeDesk({ id: 'd-1', code: 'LDN-401' });
+      const pendingBooking = makeBooking({
+        id: 'req-pending-1',
+        deskId: 'd-2',
+        status: 'pending_approval',
+      });
+
+      const harness = createStatefulHarness({
+        initialCurrentUser: adminUser,
+        initialLocations: [londonLocation],
+        initialDesks: [desk],
+        initialBookings: [pendingBooking],
+      });
+
+      // 1. Trigger bookDesk -> optimistic booking added immediately, then rolled back on API rejection
+      let ctx = harness.renderPass();
+      const res = ctx.bookDesk('d-1', '2026-11-20', 'full_day');
+      expect(res.success).toBe(true);
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+      ctx = harness.renderPass();
+      expect(ctx.bookings.map(b => b.id)).toEqual(['req-pending-1']);
+      expect(ctx.apiError).toBe('409 Conflict: Slot taken');
+
+      // 2. Trigger approveBookingRequest -> optimistic status change rolled back to pending_approval on API rejection
+      ctx.approveBookingRequest('req-pending-1', 'Try approve');
+      await new Promise(resolve => setTimeout(resolve, 0));
+      ctx = harness.renderPass();
+      expect(ctx.bookings[0].status).toBe('pending_approval');
+      expect(ctx.apiError).toBe('409 Conflict: Approval conflict');
+    });
+
+    it('cascades booking removal on deleteDesk and restores both desk and bookings if deleteDeskApi fails', async () => {
+      vi.mocked(getCurrentIdToken).mockResolvedValue('mock-jwt-token');
+      vi.mocked(deleteDeskApi).mockRejectedValueOnce(new Error('500 Delete failed'));
+
+      const desk1 = makeDesk({ id: 'd-1', code: 'LDN-401' });
+      const desk2 = makeDesk({ id: 'd-2', code: 'LDN-402' });
+      const bookingOnDesk1 = makeBooking({ id: 'b-d1', deskId: 'd-1' });
+      const bookingOnDesk2 = makeBooking({ id: 'b-d2', deskId: 'd-2' });
+
+      const harness = createStatefulHarness({
+        initialCurrentUser: adminUser,
+        initialLocations: [londonLocation],
+        initialDesks: [desk1, desk2],
+        initialBookings: [bookingOnDesk1, bookingOnDesk2],
+      });
+
+      // 1. When deleteDeskApi rejects, both desk1 and bookingOnDesk1 are restored
+      let ctx = harness.renderPass();
+      ctx.deleteDesk('d-1');
+      await new Promise(resolve => setTimeout(resolve, 0));
+      ctx = harness.renderPass();
+      expect(ctx.desks.map(d => d.id)).toEqual(['d-1', 'd-2']);
+      expect(ctx.bookings.map(b => b.id)).toEqual(['b-d1', 'b-d2']);
+      expect(ctx.apiError).toBe('500 Delete failed');
+
+      // 2. When deleteDeskApi succeeds, both desk1 and its associated bookingOnDesk1 are removed
+      vi.mocked(deleteDeskApi).mockResolvedValueOnce(undefined);
+      ctx.deleteDesk('d-1');
+      await new Promise(resolve => setTimeout(resolve, 0));
+      ctx = harness.renderPass();
+      expect(ctx.desks.map(d => d.id)).toEqual(['d-2']);
+      expect(ctx.bookings.map(b => b.id)).toEqual(['b-d2']);
+      expect(ctx.apiError).toBeNull();
     });
   });
 });

@@ -63,22 +63,28 @@ public static class UsersEndpoints
             DeskinationDbContext db) =>
         {
             var uid = principal.GetFirebaseUid() ?? "unknown-uid";
-            var callerEmail = (!string.IsNullOrWhiteSpace(request.Email) ? request.Email : principal.GetEmail())?.Trim()
-                ?? $"{uid}@firebase.local";
+            var principalEmail = principal.GetEmail()?.Trim();
+            var callerEmail = !string.IsNullOrWhiteSpace(principalEmail)
+                ? principalEmail
+                : $"{uid}@firebase.local";
             var serverRole = principal.ResolveRole();
 
             var allUsers = await db.Users.AsNoTracking().ToListAsync();
-            var existing = allUsers.FirstOrDefault(u =>
-                u.Email.Equals(callerEmail, StringComparison.OrdinalIgnoreCase) ||
-                u.Id.Equals(request.Id, StringComparison.OrdinalIgnoreCase) ||
-                u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase));
+            var existing = !string.IsNullOrWhiteSpace(principalEmail)
+                ? allUsers.FirstOrDefault(u =>
+                    u.Email.Equals(principalEmail, StringComparison.OrdinalIgnoreCase) ||
+                    u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase) ||
+                    u.Id.Equals(uid, StringComparison.OrdinalIgnoreCase))
+                : allUsers.FirstOrDefault(u =>
+                    u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase) ||
+                    u.Id.Equals(uid, StringComparison.OrdinalIgnoreCase));
 
             var effectiveRole = serverRole == Role.Admin || existing?.Role == Role.Admin
                 ? Role.Admin
                 : Role.Employee;
 
             var upserted = new User(
-                Id: existing?.Id ?? (!string.IsNullOrWhiteSpace(request.Id) ? request.Id : $"usr-{uid}"),
+                Id: existing?.Id ?? $"usr-{uid}",
                 Name: !string.IsNullOrWhiteSpace(request.Name) ? request.Name.Trim() : (existing?.Name ?? principal.GetDisplayName()),
                 Email: existing?.Email ?? callerEmail,
                 Role: effectiveRole,

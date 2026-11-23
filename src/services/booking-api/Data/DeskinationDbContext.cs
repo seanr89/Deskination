@@ -101,6 +101,9 @@ public sealed class DeskinationDbContext(DbContextOptions<DeskinationDbContext> 
 
 public static class BookingDomainRules
 {
+    public static string GetTodayUtcDateString() =>
+        DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
     public static bool SlotsOverlap(SlotType existing, SlotType requested) =>
         existing == SlotType.FullDay ||
         requested == SlotType.FullDay ||
@@ -193,10 +196,11 @@ public static class BookingDomainRules
         string? referenceDate = null,
         string? month = null)
     {
-        var refDate = string.IsNullOrWhiteSpace(referenceDate) ? "2026-10-25" : referenceDate.Trim();
+        var todayUtc = GetTodayUtcDateString();
+        var refDate = string.IsNullOrWhiteSpace(referenceDate) ? todayUtc : referenceDate.Trim();
         var monthPrefix = !string.IsNullOrWhiteSpace(month)
             ? month.Trim()
-            : refDate.Length >= 7 ? refDate[..7] : "2026-10";
+            : refDate.Length >= 7 ? refDate[..7] : todayUtc[..7];
 
         var completed = userBookings.Count(b =>
             b.Status == BookingStatus.CheckedIn ||

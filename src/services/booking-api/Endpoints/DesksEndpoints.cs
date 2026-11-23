@@ -94,7 +94,9 @@ public static class DesksEndpoints
                 return Results.NotFound(new { message = $"Desk '{id}' not found." });
             }
 
-            var targetDate = string.IsNullOrWhiteSpace(date) ? "2026-10-25" : date.Trim();
+            var targetDate = string.IsNullOrWhiteSpace(date)
+                ? BookingDomainRules.GetTodayUtcDateString()
+                : date.Trim();
             var caller = await principal.ResolveWorkspaceUserAsync(db);
 
             var deskBookings = await db.Bookings
@@ -273,6 +275,8 @@ public static class DesksEndpoints
                 return Results.NotFound(new { message = $"Desk '{id}' not found." });
             }
 
+            var bookingsToRemove = await db.Bookings.Where(b => b.DeskId == id).ToListAsync();
+            db.Bookings.RemoveRange(bookingsToRemove);
             db.Desks.Remove(existing);
             await db.SaveChangesAsync();
 
@@ -280,7 +284,7 @@ public static class DesksEndpoints
         })
         .RequireAuthorization(AuthPolicies.AdminOnly)
         .WithName("DeleteDesk")
-        .WithSummary("Deletes a desk from inventory.");
+        .WithSummary("Deletes a desk from inventory and cascades deletion to associated bookings.");
 
         return app;
     }

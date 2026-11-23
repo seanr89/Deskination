@@ -199,7 +199,9 @@ public static class LocationsEndpoints
 
         group.MapGet("/{id}/occupancy", async (string id, string? date, DeskinationDbContext db) =>
         {
-            var targetDate = string.IsNullOrWhiteSpace(date) ? "2026-10-25" : date.Trim();
+            var targetDate = string.IsNullOrWhiteSpace(date)
+                ? BookingDomainRules.GetTodayUtcDateString()
+                : date.Trim();
 
             var activeDesksCount = await db.Desks
                 .AsNoTracking()
@@ -212,7 +214,11 @@ public static class LocationsEndpoints
 
             var bookedDeskIds = await db.Bookings
                 .AsNoTracking()
-                .Where(b => b.LocationId == id && b.Date == targetDate && b.Status != BookingStatus.Cancelled)
+                .Where(b =>
+                    b.LocationId == id &&
+                    b.Date == targetDate &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Rejected)
                 .Select(b => b.DeskId)
                 .Distinct()
                 .CountAsync();
@@ -225,11 +231,17 @@ public static class LocationsEndpoints
 
         group.MapGet("/{id}/colleagues", async (string id, string? date, DeskinationDbContext db) =>
         {
-            var targetDate = string.IsNullOrWhiteSpace(date) ? "2026-10-25" : date.Trim();
+            var targetDate = string.IsNullOrWhiteSpace(date)
+                ? BookingDomainRules.GetTodayUtcDateString()
+                : date.Trim();
 
             var colleaguesBookings = await db.Bookings
                 .AsNoTracking()
-                .Where(b => b.LocationId == id && b.Date == targetDate && b.Status != BookingStatus.Cancelled)
+                .Where(b =>
+                    b.LocationId == id &&
+                    b.Date == targetDate &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Rejected)
                 .ToListAsync();
 
             return Results.Ok(colleaguesBookings);
