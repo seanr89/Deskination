@@ -34,6 +34,7 @@ services:
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-officewho-53cec}
       Firebase__Issuer: https://securetoken.google.com/${FIREBASE_PROJECT_ID:-officewho-53cec}
       Firebase__Audience: ${FIREBASE_PROJECT_ID:-officewho-53cec}
+      Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-deskination};Username=${POSTGRES_USER:-deskination};Password=${POSTGRES_PASSWORD:-deskination_dev_password}
     depends_on:
       postgres:

@@ -19,7 +19,7 @@ Run suites via the root `Makefile` or directly in each project directory:
    ```bash
    dotnet test src/services/booking-api.Tests
    ```
-   - Uses `TestWebApplicationFactory` and `TestAuthHandler` (`X-Test-User-Email`, `X-Test-User-Role`, `X-Test-User-Uid`, `X-Test-User-Name`) with isolated EF Core `InMemory` databases (`Database:Provider=InMemory`) and `DeskinationSeeder.EnsureSeededAsync`.
+   - Uses `TestWebApplicationFactory` and `TestAuthHandler` (`X-Test-User-Email`, `X-Test-User-Role`, `X-Test-User-Uid`, `X-Test-User-Name`) with isolated relational SQLite (`DataSource=:memory:`) databases, `ApplyDatabaseMigrationsAsync`, and `DeskinationSeeder.EnsureSeededAsync`.
 2. **Frontend Vitest Unit Tests (`src/clients/desk-ui`)**:
    ```bash
    cd src/clients/desk-ui && npm test

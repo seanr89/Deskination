@@ -1,7 +1,7 @@
 ---
 name: database-persistence-seeding
 description: >-
-  Configures and maintains EF Core persistence (PostgreSQL 17 via Npgsql with InMemory fallback),
+  Configures and maintains EF Core persistence (PostgreSQL 17 via Npgsql), EF Core migrations,
   BookingDomainRules slot concurrency & availability logic, and canonical workspace seeding via
   DeskinationSeeder in src/services/booking-api/Data/.
 ---
@@ -26,17 +26,21 @@ Whenever persisting a new `Booking` inside `POST /api/bookings` (`BeginTransacti
 4. **User Double-Booking Prevention**:
    - A user (`caller.Id`) cannot hold two active bookings or pending requests on the same `Date` with overlapping slots. Return `409 Conflict`.
 
-## 2. EF Core Persistence & Seeding (`Data/DeskinationDbContext.cs`, `Data/DeskinationSeeder.cs`)
+## 2. EF Core Persistence, Migrations & Seeding (`Data/DeskinationDbContext.cs`, `Data/DatabaseMigrationExtensions.cs`, `Data/DeskinationDbContextFactory.cs`, `Data/DeskinationSeeder.cs`)
 
 - **Provider Selection (`DatabaseConfigurationExtensions.AddDeskinationDatabase`)**:
-  - Uses `Npgsql` (`UseNpgsql`) when `ConnectionStrings:DefaultConnection` is configured, `Database:Provider` is not `"InMemory"`, and a 350ms TCP reachability probe succeeds; otherwise falls back to `UseInMemoryDatabase` (suppressing `InMemoryEventId.TransactionIgnoredWarning`).
+  - Strictly registers `Npgsql` (`UseNpgsql` with `MigrationsAssembly("booking-api")`) using `ConnectionStrings:DefaultConnection`, throwing `InvalidOperationException` if the connection string is missing/blank or if `Database:Provider` specifies an unsupported provider (`PostgreSQL`, `Postgres`, or `Npgsql` only).
+- **EF Core Migrations (`Data/Migrations/`, `DatabaseMigrationExtensions`, `DeskinationDbContextFactory`)**:
+  - `Program.cs` calls `await app.Services.ApplyDatabaseMigrationsAsync(app.Configuration, app.Logger)` before `DeskinationSeeder.EnsureSeededAsync(app.Services)`.
+  - Requires a relational provider (`Npgsql`, or `Sqlite` in tests); `ApplyDatabaseMigrationsAsync` applies pending EF Core migrations when `Database:AutoMigrate` is `true` (default) and baselines pre-migration `EnsureCreatedAsync` schemas to `InitialCreate`.
+  - Design-time CLI tooling (`dotnet ef`) uses `DeskinationDbContextFactory` (`IDesignTimeDbContextFactory<DeskinationDbContext>`) and the local `.config/dotnet-tools.json` manifest (`dotnet-ef` `10.0.15`).
 - **Entity Mappings (`DeskinationDbContext.OnModelCreating`)**:
   - Uses camelCase JSON `ValueConverter`/`ValueComparer` mappings for `Location.Floors`, `Desk.Equipment`, and `Desk.Position`, and stores enums as strings (`HasConversion<string>()`).
 - **Canonical Seeding (`DeskinationSeeder`)**:
-  - `EnsureSeededAsync` calls `EnsureCreatedAsync()` and populates empty `Users`, `Locations`, `Desks`, and `Bookings` tables from `InitialUsers`, `InitialLocations`, `InitialDesks`, and `InitialBookings`.
+  - `EnsureSeededAsync` populates empty `Users`, `Locations`, `Desks`, and `Bookings` tables from `InitialUsers`, `InitialLocations`, `InitialDesks`, and `InitialBookings` after migrations have run.
   - `ResetToDefaultsAsync` clears all four tables and re-seeds canonical records (invoked by `POST /api/workspace/reset`).
 - Read [references/slot-conflict-and-seeding.md](./references/slot-conflict-and-seeding.md) for the slot overlap matrix, actual `DeskinationDbContext` configuration, `BookingDomainRules`, and canonical seed summary.
-- Consult `TODO.md` before refactoring persistence (tracks missing EF Core migrations, full-table `.ToListAsync()` loads, and missing `Rejected` booking filters in `LocationsEndpoints.cs`).
+- Consult `TODO.md` before refactoring persistence (tracks full-table `.ToListAsync()` loads and other remaining debt).
 
 ## 3. Verification
 

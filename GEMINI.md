@@ -10,13 +10,12 @@ desk-ui (React 19 SPA :3000)
   └── apiClient.ts (Bearer <idToken>) ──► booking-api (.NET 10 Minimal API :8080)
                                             ├── Firebase JWT validation & AdminOnly policies
                                             └── EF Core (DeskinationDbContext)
-                                                  ├── PostgreSQL 17 (Npgsql) when reachable
-                                                  └── EF Core InMemory fallback (local dev/tests)
+                                                  └── PostgreSQL 17 (Npgsql)
 ```
 
 1. **Authentication Gate**: Unauthenticated users see `WelcomeLandingView`, then sign in or register via `AuthView` (`firebase/auth` Email/Password).
 2. **Workspace Hydration**: Once signed in, `DeskBookingContext` fetches `/api/users`, `/api/locations`, `/api/desks`, and `/api/bookings` from `booking-api` (`VITE_API_BASE_URL`) and syncs the caller profile via `PUT /api/users/me`.
-3. **Database & Seeding**: `booking-api` probes PostgreSQL with a 350ms TCP timeout (`AddDeskinationDatabase`) and falls back to `InMemory` if unreachable. On startup, `DeskinationSeeder.EnsureSeededAsync` seeds empty tables with canonical hubs (`loc-london`, `loc-belfast`, `loc-dubai`), floors, desks, users, and bookings.
+3. **Database, Migrations & Seeding**: `booking-api` requires PostgreSQL (`ConnectionStrings:DefaultConnection` via `AddDeskinationDatabase`) and fails fast if the connection string is missing or an unsupported `Database:Provider` is configured (xUnit tests substitute relational SQLite in `TestWebApplicationFactory`). On startup, `DatabaseMigrationExtensions.ApplyDatabaseMigrationsAsync` applies EF Core migrations from `Data/Migrations/` (configurable via `Database:AutoMigrate`, automatically baselining legacy `EnsureCreatedAsync` schemas), after which `DeskinationSeeder.EnsureSeededAsync` seeds empty tables with canonical hubs (`loc-london`, `loc-belfast`, `loc-dubai`), floors, desks, users, and bookings.
 
 ## Repository Layout
 

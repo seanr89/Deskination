@@ -9,6 +9,7 @@ API_TEST_PROJECT := src/services/booking-api.Tests/BookingApi.Tests.csproj
 UI_DIR := src/clients/desk-ui
 
 .PHONY: help install build build-api build-ui \
+        db-migrate db-migration-add db-migration-script \
         docker-build up docker-up down docker-down logs docker-logs docker-reset \
         dev dev-docker dev-api dev-ui \
         lint test test-api test-ui test-e2e clean
@@ -30,6 +31,16 @@ build-api: ## Build the .NET 10 Booking API
 
 build-ui: ## Type-check and build the React/Vite UI client
 	cd $(UI_DIR) && ([ -d node_modules ] || npm ci) && npm run lint && npm run build
+
+db-migrate: ## Apply EF Core migrations to PostgreSQL
+	dotnet tool restore && dotnet ef database update --project $(API_PROJECT) --startup-project $(API_PROJECT)
+
+db-migration-add: ## Add a new EF Core migration (usage: make db-migration-add NAME=MyMigration)
+	@test -n "$(NAME)" || (echo "Usage: make db-migration-add NAME=<MigrationName>"; exit 1)
+	dotnet tool restore && dotnet ef migrations add $(NAME) --project $(API_PROJECT) --startup-project $(API_PROJECT) --output-dir Data/Migrations --namespace BookingApi.Data.Migrations
+
+db-migration-script: ## Generate an idempotent SQL migration script for PostgreSQL
+	dotnet tool restore && dotnet ef migrations script --idempotent --project $(API_PROJECT) --startup-project $(API_PROJECT)
 
 docker-build: ## Build Docker Compose service images
 	$(COMPOSE) build

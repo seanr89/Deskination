@@ -6,7 +6,12 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -14,17 +19,37 @@ namespace BookingApi.Tests;
 
 public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databaseName = $"DeskinationTestDb_{Guid.NewGuid():N}";
-
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.UseSetting("Database:Provider", "InMemory");
-        builder.UseSetting("Database:InMemoryName", _databaseName);
-        builder.UseSetting("ConnectionStrings:DefaultConnection", string.Empty);
+        builder.UseSetting("Database:Provider", "PostgreSQL");
+        builder.UseSetting(
+            "ConnectionStrings:DefaultConnection",
+            "Host=localhost;Port=5432;Database=deskination_test;Username=deskination;Password=test");
 
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<DbContextOptions<DeskinationDbContext>>();
+            services.RemoveAll<DbContextOptions>();
+            services.RemoveAll<DeskinationDbContext>();
+            services.RemoveAll<IDbContextOptionsConfiguration<DeskinationDbContext>>();
+
+            services.AddSingleton(_ =>
+            {
+                var connection = new SqliteConnection("DataSource=:memory:");
+                connection.Open();
+                return connection;
+            });
+
+            services.AddDbContext<DeskinationDbContext>((sp, options) =>
+            {
+                var connection = sp.GetRequiredService<SqliteConnection>();
+                options.UseSqlite(
+                        connection,
+                        sqlite => sqlite.MigrationsAssembly(typeof(DeskinationDbContext).Assembly.GetName().Name))
+                    .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+            });
+
             services
                 .AddAuthentication(options =>
                 {
@@ -65,6 +90,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 
     public async Task EnsureSeededAsync()
     {
+        await Services.ApplyDatabaseMigrationsAsync();
         await DeskinationSeeder.EnsureSeededAsync(Services);
     }
 }

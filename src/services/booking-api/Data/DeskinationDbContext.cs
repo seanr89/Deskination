@@ -1,11 +1,8 @@
-using System.Net.Sockets;
 using System.Text.Json;
 using BookingApi.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Npgsql;
 
 namespace BookingApi.Data;
 
@@ -270,55 +267,28 @@ public static class DatabaseConfigurationExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
-        var providerSetting = configuration["Database:Provider"];
-        var forceInMemory = string.Equals(
-            providerSetting,
-            "InMemory",
-            StringComparison.OrdinalIgnoreCase);
-        var forcePostgres =
-            string.Equals(providerSetting, "PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(providerSetting, "Postgres", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(providerSetting, "Npgsql", StringComparison.OrdinalIgnoreCase);
-        var inMemoryDatabaseName = !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"])
-            ? configuration["Database:InMemoryName"]!
-            : "DeskinationWorkspaceDb";
+        var providerSetting = configuration["Database:Provider"]?.Trim();
+        if (!string.IsNullOrEmpty(providerSetting) &&
+            !string.Equals(providerSetting, "PostgreSQL", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(providerSetting, "Postgres", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(providerSetting, "Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported Database:Provider '{providerSetting}'. Only PostgreSQL is supported.");
+        }
 
-        var usePostgres = !forceInMemory &&
-                          !string.IsNullOrWhiteSpace(connectionString) &&
-                          (forcePostgres || IsPostgresReachable(connectionString));
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "PostgreSQL connection string 'ConnectionStrings:DefaultConnection' is required.");
+        }
 
         services.AddDbContext<DeskinationDbContext>(options =>
-        {
-            if (usePostgres && !string.IsNullOrWhiteSpace(connectionString))
-            {
-                options.UseNpgsql(connectionString);
-            }
-            else
-            {
-                options.UseInMemoryDatabase(inMemoryDatabaseName)
-                       .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
-            }
-        });
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsAssembly(typeof(DeskinationDbContext).Assembly.GetName().Name)));
 
         return services;
-    }
-
-    private static bool IsPostgresReachable(string connectionString)
-    {
-        try
-        {
-            var builder = new NpgsqlConnectionStringBuilder(connectionString);
-            var host = string.IsNullOrWhiteSpace(builder.Host) ? "localhost" : builder.Host;
-            var port = builder.Port > 0 ? builder.Port : 5432;
-
-            using var client = new TcpClient();
-            var connectTask = client.ConnectAsync(host, port);
-            return connectTask.Wait(TimeSpan.FromMilliseconds(350)) && client.Connected;
-        }
-        catch
-        {
-            return false;
-        }
     }
 }

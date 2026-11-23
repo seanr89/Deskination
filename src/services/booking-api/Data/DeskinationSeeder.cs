@@ -990,7 +990,6 @@ public static class DeskinationSeeder
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DeskinationDbContext>();
-        await db.Database.EnsureCreatedAsync();
 
         if (!await db.Users.AnyAsync())
         {

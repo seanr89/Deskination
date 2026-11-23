@@ -38,11 +38,11 @@ Generated from a codebase review of `src/services/booking-api` and `src/clients/
 - [ ] **Full-table `.ToListAsync()` loads before filtering**
   - `BookingsEndpoints.GetBookings`, `DesksEndpoints.GetDesks`, `UsersEndpoints.GetUsers`, and `FirebaseAuthExtensions.ResolveWorkspaceUserAsync` load entire tables into memory with `.ToListAsync()` before applying LINQ filters instead of composing EF Core `IQueryable` queries.
 
-- [ ] **No EF Core migrations**
-  - `Program.cs` relies on `DeskinationSeeder.EnsureSeededAsync` rather than EF Core migrations, making PostgreSQL schema changes manual or destructive.
+- [x] **No EF Core migrations**
+  - Resolved via `Data/Migrations/InitialCreate`, `DeskinationDbContextFactory`, `DatabaseMigrationExtensions.ApplyDatabaseMigrationsAsync` (invoked on startup before `DeskinationSeeder.EnsureSeededAsync`, configurable via `Database:AutoMigrate`, with automatic baselining for legacy `EnsureCreatedAsync` schemas), `Makefile` EF migration targets, and model-drift/migration verification tests in `DatabaseMigrationsTests.cs`.
 
-- [ ] **Silent fallback from PostgreSQL to InMemory database**
-  - `DatabaseConfigurationExtensions.AddDeskinationDatabase` (`DeskinationDbContext.cs`) probes Postgres with a 350ms TCP timeout and silently falls back to `UseInMemoryDatabase` if unreachable, which can mask database misconfiguration in non-local environments.
+- [x] **Silent fallback from PostgreSQL to InMemory database**
+  - Removed `Microsoft.EntityFrameworkCore.InMemory` and the 350ms TCP fallback from `AddDeskinationDatabase` (`DeskinationDbContext.cs`), `DatabaseMigrationExtensions.cs`, and `DeskinationSeeder.cs` so `booking-api` strictly requires PostgreSQL (`Npgsql`) and fails fast on missing/unsupported database configuration, while `TestWebApplicationFactory` runs isolated tests against relational SQLite (`DataSource=:memory:`).
 
 - [x] **Hardcoded CORS origins in `Program.cs`**
   - Resolved via `Program.ResolveCorsAllowedOrigins` reading `Cors:AllowedOrigins` (scalar or array configuration) with default fallback to `http://localhost:3000` and `http://localhost:5173`.

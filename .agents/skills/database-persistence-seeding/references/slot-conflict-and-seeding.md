@@ -26,7 +26,7 @@ public static bool IsActiveBooking(BookingStatus status) =>
 
 ## 2. Actual EF Core `DeskinationDbContext` Mapping (`Data/DeskinationDbContext.cs`)
 
-`DeskinationDbContext` exposes `Users`, `Locations`, `Desks`, and `Bookings` `DbSet<T>` properties and persists nested collections/value objects as camelCase JSON strings via explicit `ValueConverter` + `ValueComparer` definitions so the schema works identically on both PostgreSQL 17 (`Npgsql`) and EF Core `InMemory`:
+`DeskinationDbContext` exposes `Users`, `Locations`, `Desks`, and `Bookings` `DbSet<T>` properties and persists nested collections/value objects as camelCase JSON strings via explicit `ValueConverter` + `ValueComparer` definitions for PostgreSQL 17 (`Npgsql`) and relational SQLite test databases:
 
 - `User`: primary key `Id`, unique index on `Email`, `Role` stored as string.
 - `Location`: primary key `Id`, `Floors` (`IReadOnlyList<Floor>`, including nested `Zones` and `Elements`) serialized via `floorsConverter` / `floorsComparer`.
@@ -34,8 +34,9 @@ public static bool IsActiveBooking(BookingStatus status) =>
 - `Booking`: primary key `Id`, composite indexes on `(DeskId, Date)` and `(UserId, Date)`, `Slot`/`Status` stored as strings.
 
 Database startup (`Program.cs`) uses:
-- `builder.Services.AddDeskinationDatabase(builder.Configuration)` — probes PostgreSQL (`ConnectionStrings:DefaultConnection`) with a 350ms TCP connect timeout and falls back to `UseInMemoryDatabase("DeskinationWorkspaceDb")` if unreachable or when `Database:Provider == "InMemory"`.
-- `await DeskinationSeeder.EnsureSeededAsync(app.Services)` — calls `await db.Database.EnsureCreatedAsync()` and inserts seed entities when tables are empty (note: EF Core migrations are not yet used; tracked in `TODO.md`).
+- `builder.Services.AddDeskinationDatabase(builder.Configuration)` — strictly registers `UseNpgsql` using `ConnectionStrings:DefaultConnection` (throws `InvalidOperationException` if the connection string is missing/blank or `Database:Provider` specifies an unsupported provider).
+- `await app.Services.ApplyDatabaseMigrationsAsync(app.Configuration, app.Logger)` — requires a relational provider, applies EF Core migrations from `Data/Migrations/` when `Database:AutoMigrate` is enabled, and automatically baselines legacy `EnsureCreatedAsync` schemas to `InitialCreate`.
+- `await DeskinationSeeder.EnsureSeededAsync(app.Services)` — inserts seed entities when tables are empty after migrations have run.
 
 ## 3. Canonical Seed Dataset (`src/services/booking-api/Data/DeskinationSeeder.cs`)
 
@@ -56,9 +57,9 @@ Database startup (`Program.cs`) uses:
 
 ## 4. Test Harness Persistence (`src/services/booking-api.Tests/TestWebApplicationFactory.cs`)
 
-`TestWebApplicationFactory` isolates each test run by overriding:
-- `Database:Provider = "InMemory"`
-- `Database:InMemoryName = "DeskinationTestDb_<guid>"`
-- `ConnectionStrings:DefaultConnection = ""`
+`TestWebApplicationFactory` isolates each test run by replacing `DeskinationDbContext` in `ConfigureTestServices` with a host-scoped open relational SQLite connection:
+- `SqliteConnection("DataSource=:memory:")` opened per `WebApplicationFactory` instance
+- `UseSqlite(connection, sqlite => sqlite.MigrationsAssembly("booking-api"))`
+- Applies real EF Core migrations (`ApplyDatabaseMigrationsAsync`) and seeds via `DeskinationSeeder.EnsureSeededAsync`
 
-This ensures `BookingApiIntegrationTests` runs deterministically without touching local or Docker PostgreSQL instances.
+This ensures `BookingApiIntegrationTests` runs deterministically with relational SQL/migrations without touching local or Docker PostgreSQL instances.

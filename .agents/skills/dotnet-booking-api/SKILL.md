@@ -21,7 +21,7 @@ All C# models and DTOs in `src/services/booking-api/Models/DeskBookingModels.cs`
 ## 2. Startup, Auth & CORS (`Program.cs`, `Auth/FirebaseAuthExtensions.cs`)
 
 - **OpenAPI & CORS**: `Program.cs` registers `AddOpenApi()` (mapped via `app.MapOpenApi()` in `Development`) and CORS policy `"DeskUiClient"` allowing `http://localhost:3000` and `http://localhost:5173`.
-- **Database & Seeding**: Calls `builder.Services.AddDeskinationDatabase(builder.Configuration)` and `await DeskinationSeeder.EnsureSeededAsync(app.Services)` on startup.
+- **Database & Seeding**: Calls `builder.Services.AddDeskinationDatabase(builder.Configuration)` (strict PostgreSQL via `Npgsql`), `await app.Services.ApplyDatabaseMigrationsAsync(app.Configuration, app.Logger)`, and `await DeskinationSeeder.EnsureSeededAsync(app.Services)` on startup.
 - **Firebase JWT Bearer (`AddFirebaseAuthentication`)**:
   - Reads `Firebase:ProjectId` (default `"officewho-53cec"`), configuring `Authority = https://securetoken.google.com/{ProjectId}` and `ValidAudience = {ProjectId}`.
   - Extracts UID (`user_id`, `ClaimTypes.NameIdentifier`, `sub`) and email (`email`, `ClaimTypes.Email`).
@@ -50,7 +50,7 @@ All C# models and DTOs in `src/services/booking-api/Models/DeskBookingModels.cs`
 
 ## 4. Integration Testing (`src/services/booking-api.Tests/`)
 
-- `TestWebApplicationFactory`: boots `Program` against an isolated EF Core `InMemory` database (`Database:Provider=InMemory`) and registers `TestAuthHandler` (`TestAuth` scheme reading `X-Test-User-Email`, `X-Test-User-Role`, `X-Test-User-Uid`, `X-Test-User-Name` headers).
+- `TestWebApplicationFactory`: boots `Program` and swaps `DeskinationDbContext` in `ConfigureTestServices` to an isolated relational SQLite (`DataSource=:memory:`) database with EF Core migrations, and registers `TestAuthHandler` (`TestAuth` scheme reading `X-Test-User-Email`, `X-Test-User-Role`, `X-Test-User-Uid`, `X-Test-User-Name` headers).
 - `BookingApiIntegrationTests`: covers `/api/health`, 401 auth gates, `PUT /api/users/me` upsert, camelCase/snake_case wire format, slot conflict & `requires_approval` rules, `AdminOnly` approve/reject, and check-in/cancel transitions.
 
 ## 5. Verification
