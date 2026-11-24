@@ -39,6 +39,7 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+await app.Services.ApplyDatabaseMigrationsAsync(app.Configuration, app.Logger);
 await DeskinationSeeder.EnsureSeededAsync(app.Services);
 
 if (app.Environment.IsDevelopment())

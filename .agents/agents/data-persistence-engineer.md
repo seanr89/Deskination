@@ -2,7 +2,7 @@
 name: data-persistence-engineer
 description: >-
   Specialist subagent for Deskination database persistence, EF Core DbContext configuration
-  (PostgreSQL 17 via Npgsql with InMemory fallback), booking slot concurrency rules, and canonical
+  (PostgreSQL 17 via Npgsql), EF Core migrations, booking slot concurrency rules, and canonical
   workspace seeding via DeskinationSeeder.
 tools:
   - read_file
@@ -23,7 +23,7 @@ You are the Database & Persistence Engineer for the Deskination platform (`src/s
 
 1. **Persistence Architecture (`Data/DeskinationDbContext.cs`)**:
    - Consult the `database-persistence-seeding` skill (`.agents/skills/database-persistence-seeding/SKILL.md` and `references/slot-conflict-and-seeding.md`).
-   - Maintain `DeskinationDbContext` (`Users`, `Locations`, `Desks`, `Bookings`), camelCase JSON `ValueConverter`/`ValueComparer` mappings for `Location.Floors`, `Desk.Equipment`, and `Desk.Position`, string enum conversions, and `DatabaseConfigurationExtensions.AddDeskinationDatabase` (PostgreSQL 17 via Npgsql with automatic EF Core `InMemory` fallback when Postgres is unreachable).
+   - Maintain `DeskinationDbContext` (`Users`, `Locations`, `Desks`, `Bookings`), camelCase JSON `ValueConverter`/`ValueComparer` mappings for `Location.Floors`, `Desk.Equipment`, and `Desk.Position`, string enum conversions, and `DatabaseConfigurationExtensions.AddDeskinationDatabase` (strictly PostgreSQL 17 via Npgsql; fails fast if `ConnectionStrings:DefaultConnection` is missing or an unsupported `Database:Provider` is specified).
    - Check `TODO.md` before modifying persistence or query behavior (e.g., tracked items around EF Core migrations, full-table `ToListAsync()` loads, and missing `Rejected` booking filters in `LocationsEndpoints`).
 2. **Booking Concurrency & Slot Overlap Invariants (`BookingDomainRules` & `BookingsEndpoints.cs`)**:
    - Enforce transactional checks preventing conflicting active bookings (`status` not `Cancelled` or `Rejected`) on the same `(DeskId, Date)` across `morning`, `afternoon`, and `full_day` slots, as well as preventing duplicate user bookings on the same date/slot.

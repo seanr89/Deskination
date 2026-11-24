@@ -2,7 +2,7 @@
 
 ## 1. Backend Integration Tests (`src/services/booking-api.Tests`)
 
-Use `TestWebApplicationFactory` to isolate each test's EF Core `InMemory` database and authenticate as either an employee or admin without live Firebase tokens:
+Use `TestWebApplicationFactory` to isolate each test's relational SQLite (`DataSource=:memory:`) database and authenticate as either an employee or admin without live Firebase tokens:
 
 ```csharp
 await using var factory = new TestWebApplicationFactory();

@@ -3,7 +3,7 @@
 ## Technology Stack
 
 - **Runtime & SDK**: .NET 10 (`net10.0`), C# 14, ASP.NET Core Minimal APIs
-- **Persistence**: Entity Framework Core 10 with PostgreSQL 17 (`Npgsql.EntityFrameworkCore.PostgreSQL`) and `InMemory` fallback (`Microsoft.EntityFrameworkCore.InMemory`)
+- **Persistence**: Entity Framework Core 10 with PostgreSQL 17 (`Npgsql.EntityFrameworkCore.PostgreSQL`) and EF Core migrations (`Data/Migrations/`)
 - **OpenAPI**: `Microsoft.AspNetCore.OpenApi` (`AddOpenApi()`, mapped via `app.MapOpenApi()` in `Development`)
 - **Authentication**: Firebase JWT Bearer (`Microsoft.AspNetCore.Authentication.JwtBearer`) for project `officewho-53cec`
 - **Testing**: xUnit integration suite in `src/services/booking-api.Tests/` (`TestWebApplicationFactory`, `TestAuthHandler`, `BookingApiIntegrationTests`)
@@ -18,11 +18,13 @@
    - `GetFirebaseUid()` reads `user_id`, `ClaimTypes.NameIdentifier`, or `sub`; `GetEmail()` reads `email` or `ClaimTypes.Email`.
    - Policies: `AuthPolicies.EmployeeOrAdmin` (authenticated user) and `AuthPolicies.AdminOnly` (`role=admin`, `admin=true`, or `elena.rostova@acme-corp.internal`).
    - `ResolveWorkspaceUserAsync` matches callers against `db.Users` by email or `usr-{uid}` and synthesizes a fallback `User` if not yet persisted.
-3. **Persistence, Rules & Seeding (`Data/`)**:
+3. **Persistence, Migrations, Rules & Seeding (`Data/`)**:
    - `DeskinationDbContext.cs` stores `Location.Floors`, `Desk.Equipment`, and `Desk.Position` as camelCase JSON strings via EF Core `ValueConverter`/`ValueComparer`, and converts enums to strings.
-   - `DatabaseConfigurationExtensions.AddDeskinationDatabase` probes `ConnectionStrings:DefaultConnection` via a 350ms TCP check and falls back to `UseInMemoryDatabase` (`DeskinationWorkspaceDb`) unless `Database:Provider` is explicitly `"InMemory"` or `"PostgreSQL"` (`"Postgres"` / `"Npgsql"`).
+   - `DatabaseConfigurationExtensions.AddDeskinationDatabase` strictly registers PostgreSQL (`UseNpgsql` with the `booking-api` migrations assembly), throwing `InvalidOperationException` if `ConnectionStrings:DefaultConnection` is missing/blank or if `Database:Provider` specifies an unsupported provider.
+   - `DeskinationDbContextFactory` provides design-time `IDesignTimeDbContextFactory<DeskinationDbContext>` support targeting PostgreSQL for `dotnet ef` CLI commands (`Data/Migrations/`).
+   - `DatabaseMigrationExtensions.ApplyDatabaseMigrationsAsync` runs on startup before seeding: requires a relational provider, applies pending EF Core migrations when `Database:AutoMigrate` is enabled (baselining legacy `EnsureCreatedAsync` schemas to `InitialCreate`), and throws if a non-relational provider is used.
    - `BookingDomainRules` centralizes `SlotsOverlap`, `IsActiveBooking`, `ComputeDeskAvailability`, and `ComputeUserStats`.
-   - `DeskinationSeeder.EnsureSeededAsync` seeds empty tables on startup; `ResetToDefaultsAsync` powers `POST /api/workspace/reset`.
+   - `DeskinationSeeder.EnsureSeededAsync` seeds empty tables on startup after migrations run; `ResetToDefaultsAsync` powers `POST /api/workspace/reset`.
 4. **Minimal API Endpoint Groups (`Endpoints/` + `Program.cs`)**:
    - `Program.cs`: `UseForwardedHeaders()` (`X-Forwarded-For` / `X-Forwarded-Proto`), `GET /api/health` (unauthenticated status, provider, and entity counts), and CORS policy `"DeskUiClient"` resolved from `Cors:AllowedOrigins` (defaulting to `http://localhost:3000`, `http://localhost:5173`).
    - `AuthEndpoints.cs`: `/api/auth` (`/status`, `/me`, `/admin-check`).
