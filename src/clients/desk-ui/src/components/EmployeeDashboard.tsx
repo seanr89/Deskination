@@ -195,8 +195,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ onNavigate
            !avail.requiresApproval;
   }).length;
 
-  const handle1ClickBook = (targetDate: string, desk: Desk) => {
-    const result = bookDesk(desk.id, targetDate, quickSlot, '1-Click Quick Book');
+  const handle1ClickBook = async (targetDate: string, desk: Desk) => {
+    const result = await bookDesk(desk.id, targetDate, quickSlot, '1-Click Quick Book');
     if (result.success) {
       setSuccessToast(`Workstation ${desk.code} reserved for ${targetDate === todayIso ? 'Today' : 'Tomorrow'} (${quickSlot.replace('_', ' ')})!`);
       setTimeout(() => setSuccessToast(null), 3500);

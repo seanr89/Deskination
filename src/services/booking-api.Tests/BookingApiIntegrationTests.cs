@@ -705,4 +705,211 @@ public sealed class BookingApiIntegrationTests
         Assert.NotNull(afterBookings);
         Assert.Empty(afterBookings);
     }
+
+    [Fact]
+    public async Task GetEndpoints_SqlFilters_FilterBookingsDesksAndUsersAccurately()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateAuthenticatedClient(
+            email: "sarah.chen@acme-corp.internal",
+            role: "employee");
+
+        // 1. GET /api/bookings with date range, status, slot, and case-insensitive search (including ApprovalReason)
+        var filteredBookings = await client.GetFromJsonAsync<List<Booking>>(
+            "/api/bookings?locationId=loc-london&startDate=2026-10-25&endDate=2026-10-28&status=PendingApproval&slot=FullDay&search=PROTOTYPE",
+            JsonOptions);
+        Assert.NotNull(filteredBookings);
+        var pendingMatch = Assert.Single(filteredBookings);
+        Assert.Equal("bkg-pending-1", pendingMatch.Id);
+
+        // 2. GET /api/desks with allocationType=Unreserved (includes null allocationType) and Equipment search
+        var unreservedWithStudioDisplay = await client.GetFromJsonAsync<List<Desk>>(
+            "/api/desks?locationId=loc-london&floorId=flr-ldn-4&allocationType=Unreserved&status=Active&search=studio%20display",
+            JsonOptions);
+        Assert.NotNull(unreservedWithStudioDisplay);
+        var studioDesk = Assert.Single(unreservedWithStudioDisplay);
+        Assert.Equal("desk-ldn-405", studioDesk.Id);
+
+        // 3. GET /api/desks with status=Maintenance
+        var maintDesks = await client.GetFromJsonAsync<List<Desk>>(
+            "/api/desks?status=Maintenance",
+            JsonOptions);
+        Assert.NotNull(maintDesks);
+        var maintDesk = Assert.Single(maintDesks);
+        Assert.Equal("desk-ldn-413", maintDesk.Id);
+
+        // 4. GET /api/users with department, role, and search
+        var filteredUsers = await client.GetFromJsonAsync<List<User>>(
+            "/api/users?department=workplace%20operations&role=Admin&search=rostova",
+            JsonOptions);
+        Assert.NotNull(filteredUsers);
+        var adminMatch = Assert.Single(filteredUsers);
+        Assert.Equal("usr-admin-elena", adminMatch.Id);
+    }
+
+    [Fact]
+    public async Task BatchUpdateDeskPositions_UpdatesMultipleDesksAndHandlesDuplicatesMissingAndEmptyUpdates()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+
+        // 1. Empty batch returns 200 []
+        var emptyRes = await adminClient.PatchAsJsonAsync(
+            "/api/desks/positions",
+            new BatchUpdateDeskPositionsRequest([]),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, emptyRes.StatusCode);
+        var emptyUpdated = await emptyRes.Content.ReadFromJsonAsync<List<Desk>>(JsonOptions);
+        Assert.NotNull(emptyUpdated);
+        Assert.Empty(emptyUpdated);
+
+        // 2. Multi-desk update with duplicate ID (last-write-wins) and missing ID
+        var batchReq = new BatchUpdateDeskPositionsRequest(
+        [
+            new DeskPositionUpdateItem("desk-ldn-401", new DeskPosition(11, 21), Rotation: 90),
+            new DeskPositionUpdateItem("desk-ldn-402", new DeskPosition(33, 44), Rotation: 180),
+            new DeskPositionUpdateItem("desk-ldn-401", new DeskPosition(15, 25), Rotation: 270),
+            new DeskPositionUpdateItem("desk-does-not-exist", new DeskPosition(99, 99), Rotation: 0)
+        ]);
+
+        var batchRes = await adminClient.PatchAsJsonAsync("/api/desks/positions", batchReq, JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, batchRes.StatusCode);
+
+        var updatedList = await batchRes.Content.ReadFromJsonAsync<List<Desk>>(JsonOptions);
+        Assert.NotNull(updatedList);
+        Assert.Equal(2, updatedList.Count);
+
+        var d401 = await adminClient.GetFromJsonAsync<Desk>("/api/desks/desk-ldn-401", JsonOptions);
+        Assert.NotNull(d401);
+        Assert.Equal(new DeskPosition(15, 25), d401.Position);
+        Assert.Equal(270, d401.Rotation);
+
+        var d402 = await adminClient.GetFromJsonAsync<Desk>("/api/desks/desk-ldn-402", JsonOptions);
+        Assert.NotNull(d402);
+        Assert.Equal(new DeskPosition(33, 44), d402.Position);
+        Assert.Equal(180, d402.Rotation);
+    }
+
+    [Fact]
+    public async Task GetDesksAvailability_BatchEndpoint_ComputesAvailabilityAcrossLocationAndFloor()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var marcusClient = factory.CreateAuthenticatedClient(
+            email: "marcus.vance@acme-corp.internal",
+            role: "employee");
+
+        var map = await marcusClient.GetFromJsonAsync<Dictionary<string, SlotAvailability>>(
+            "/api/desks/availability?locationId=loc-london&floorId=flr-ldn-4&date=2026-10-25",
+            JsonOptions);
+
+        Assert.NotNull(map);
+        Assert.NotEmpty(map);
+
+        // desk-ldn-404 is designated to Sarah and booked FullDay on 2026-10-25
+        Assert.True(map.ContainsKey("desk-ldn-404"));
+        Assert.False(map["desk-ldn-404"].FullDay);
+        Assert.True(map["desk-ldn-404"].IsDesignatedToOther);
+        Assert.Equal("Sarah Chen", map["desk-ldn-404"].DesignatedUser);
+
+        // desk-ldn-420 requires approval and has Morning booked by Priya Patel
+        Assert.True(map.ContainsKey("desk-ldn-420"));
+        Assert.False(map["desk-ldn-420"].Morning);
+        Assert.True(map["desk-ldn-420"].Afternoon);
+        Assert.True(map["desk-ldn-420"].RequiresApproval);
+
+        // desk-ldn-401 is completely available
+        Assert.True(map.ContainsKey("desk-ldn-401"));
+        Assert.True(map["desk-ldn-401"].FullDay);
+    }
+
+    [Fact]
+    public async Task GetLocationOccupancyRange_ComputesDailyRatesExcludesCancelledRejectedAndValidatesRange()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var employeeClient = factory.CreateAuthenticatedClient(
+            email: "sarah.chen@acme-corp.internal",
+            role: "employee");
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+
+        // 1. Create and reject a request on 2026-12-10
+        var pendingRes = await employeeClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest("desk-ldn-420", "2026-12-10", SlotType.FullDay, ApprovalReason: "Range test"),
+            JsonOptions);
+        var pendingBooking = (await pendingRes.Content.ReadFromJsonAsync<BookingActionResponse>(JsonOptions))!.Booking!;
+        await adminClient.PostAsJsonAsync(
+            $"/api/bookings/{pendingBooking.Id}/reject",
+            new RejectBookingRequest("Denied"),
+            JsonOptions);
+
+        // 2. Book confirmed on 2026-12-11
+        var confirmedRes = await employeeClient.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest("desk-ldn-401", "2026-12-11", SlotType.Morning),
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.Created, confirmedRes.StatusCode);
+
+        // 3. Query 3-day range 2026-12-10 .. 2026-12-12
+        var range = await employeeClient.GetFromJsonAsync<Dictionary<string, LocationOccupancyResponse>>(
+            "/api/locations/loc-london/occupancy/range?startDate=2026-12-10&endDate=2026-12-12",
+            JsonOptions);
+
+        Assert.NotNull(range);
+        Assert.Equal(3, range.Count);
+        Assert.Equal(0, range["2026-12-10"].Booked);
+        Assert.Equal(1, range["2026-12-11"].Booked);
+        Assert.Equal(0, range["2026-12-12"].Booked);
+        Assert.True(range["2026-12-11"].Total > 0);
+
+        // 4. Invalid / inverted / excessive ranges return 400 BadRequest
+        var badFormat = await employeeClient.GetAsync(
+            "/api/locations/loc-london/occupancy/range?startDate=bad&endDate=2026-12-12");
+        Assert.Equal(HttpStatusCode.BadRequest, badFormat.StatusCode);
+
+        var inverted = await employeeClient.GetAsync(
+            "/api/locations/loc-london/occupancy/range?startDate=2026-12-12&endDate=2026-12-10");
+        Assert.Equal(HttpStatusCode.BadRequest, inverted.StatusCode);
+
+        var tooWide = await employeeClient.GetAsync(
+            "/api/locations/loc-london/occupancy/range?startDate=2026-01-01&endDate=2026-06-01");
+        Assert.Equal(HttpStatusCode.BadRequest, tooWide.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthEndpoints_TargetedUserResolution_WorksForKnownEmployeeAdminAndFallbackUser()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var sarahClient = factory.CreateAuthenticatedClient(
+            email: "sarah.chen@acme-corp.internal",
+            role: "employee");
+        using var adminClient = factory.CreateAuthenticatedClient(
+            email: "elena.rostova@acme-corp.internal",
+            role: "admin");
+        using var brandNewClient = factory.CreateAuthenticatedClient(
+            email: "brand.new@acme-corp.internal",
+            role: "employee",
+            uid: "uid-brand-new",
+            displayName: "Brand New");
+
+        var sarahMe = await sarahClient.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal("usr-sarah", sarahMe.GetProperty("profile").GetProperty("id").GetString());
+        Assert.Equal("employee", sarahMe.GetProperty("role").GetString());
+
+        var sarahAdminCheck = await sarahClient.GetAsync("/api/auth/admin-check");
+        Assert.Equal(HttpStatusCode.Forbidden, sarahAdminCheck.StatusCode);
+
+        var adminCheck = await adminClient.GetAsync("/api/auth/admin-check");
+        Assert.Equal(HttpStatusCode.OK, adminCheck.StatusCode);
+        var adminPayload = await adminCheck.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(adminPayload.GetProperty("authorized").GetBoolean());
+        Assert.Equal("admin", adminPayload.GetProperty("role").GetString());
+
+        var newMe = await brandNewClient.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal("usr-uid-brand-new", newMe.GetProperty("profile").GetProperty("id").GetString());
+        Assert.Equal("Brand New", newMe.GetProperty("displayName").GetString());
+    }
 }

@@ -20,30 +20,31 @@ public static class UsersEndpoints
             string? department = null,
             Role? role = null) =>
         {
-            var users = await db.Users.AsNoTracking().ToListAsync();
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var term = search.Trim();
-                users = users.Where(u =>
-                    u.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    u.Email.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    u.Department.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    u.JobTitle.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
+            IQueryable<User> query = db.Users.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(department))
             {
-                var dept = department.Trim();
-                users = users.Where(u =>
-                    u.Department.Equals(dept, StringComparison.OrdinalIgnoreCase)).ToList();
+                var deptLower = department.Trim().ToLowerInvariant();
+                query = query.Where(u => u.Department.ToLower() == deptLower);
             }
 
             if (role.HasValue)
             {
-                users = users.Where(u => u.Role == role.Value).ToList();
+                var targetRole = role.Value;
+                query = query.Where(u => u.Role == targetRole);
             }
 
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var termLower = search.Trim().ToLowerInvariant();
+                query = query.Where(u =>
+                    u.Name.ToLower().Contains(termLower) ||
+                    u.Email.ToLower().Contains(termLower) ||
+                    u.Department.ToLower().Contains(termLower) ||
+                    u.JobTitle.ToLower().Contains(termLower));
+            }
+
+            var users = await query.ToListAsync();
             return Results.Ok(users);
         })
         .WithName("GetUsers")
@@ -69,15 +70,28 @@ public static class UsersEndpoints
                 : $"{uid}@firebase.local";
             var serverRole = principal.ResolveRole();
 
-            var allUsers = await db.Users.AsNoTracking().ToListAsync();
-            var existing = !string.IsNullOrWhiteSpace(principalEmail)
-                ? allUsers.FirstOrDefault(u =>
-                    u.Email.Equals(principalEmail, StringComparison.OrdinalIgnoreCase) ||
-                    u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase) ||
-                    u.Id.Equals(uid, StringComparison.OrdinalIgnoreCase))
-                : allUsers.FirstOrDefault(u =>
-                    u.Id.Equals($"usr-{uid}", StringComparison.OrdinalIgnoreCase) ||
-                    u.Id.Equals(uid, StringComparison.OrdinalIgnoreCase));
+            var prefixedUidLower = $"usr-{uid}".ToLowerInvariant();
+            var uidLower = uid.ToLowerInvariant();
+
+            User? existing;
+            if (!string.IsNullOrWhiteSpace(principalEmail))
+            {
+                var emailLower = principalEmail.ToLowerInvariant();
+                existing = await db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u =>
+                        u.Email.ToLower() == emailLower ||
+                        u.Id.ToLower() == prefixedUidLower ||
+                        u.Id.ToLower() == uidLower);
+            }
+            else
+            {
+                existing = await db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u =>
+                        u.Id.ToLower() == prefixedUidLower ||
+                        u.Id.ToLower() == uidLower);
+            }
 
             var effectiveRole = serverRole == Role.Admin || existing?.Role == Role.Admin
                 ? Role.Admin
@@ -141,10 +155,20 @@ public static class UsersEndpoints
             }
 
             var normalizedEmail = request.Email.Trim();
-            var allUsers = await db.Users.AsNoTracking().ToListAsync();
-            var existing = allUsers.FirstOrDefault(u =>
-                u.Email.Equals(normalizedEmail, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrWhiteSpace(request.Id) && u.Id.Equals(request.Id, StringComparison.OrdinalIgnoreCase)));
+            var emailLower = normalizedEmail.ToLowerInvariant();
+            var requestedIdLower = !string.IsNullOrWhiteSpace(request.Id)
+                ? request.Id.Trim().ToLowerInvariant()
+                : null;
+
+            var existing = requestedIdLower is not null
+                ? await db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u =>
+                        u.Email.ToLower() == emailLower ||
+                        u.Id.ToLower() == requestedIdLower)
+                : await db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == emailLower);
 
             var userId = existing?.Id
                 ?? (!string.IsNullOrWhiteSpace(request.Id) ? request.Id.Trim() : $"usr-custom-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");

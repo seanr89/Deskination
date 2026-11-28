@@ -27,66 +27,74 @@ public static class BookingsEndpoints
             SlotType? slot = null,
             string? search = null) =>
         {
-            var bookings = await db.Bookings.AsNoTracking().ToListAsync();
+            IQueryable<Booking> query = db.Bookings.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(locationId))
             {
-                bookings = bookings.Where(b => b.LocationId == locationId.Trim()).ToList();
+                var loc = locationId.Trim();
+                query = query.Where(b => b.LocationId == loc);
             }
 
             if (!string.IsNullOrWhiteSpace(floorId))
             {
-                bookings = bookings.Where(b => b.FloorId == floorId.Trim()).ToList();
+                var flr = floorId.Trim();
+                query = query.Where(b => b.FloorId == flr);
             }
 
             if (!string.IsNullOrWhiteSpace(deskId))
             {
-                bookings = bookings.Where(b => b.DeskId == deskId.Trim()).ToList();
+                var dsk = deskId.Trim();
+                query = query.Where(b => b.DeskId == dsk);
             }
 
             if (!string.IsNullOrWhiteSpace(userId))
             {
-                bookings = bookings.Where(b => b.UserId == userId.Trim()).ToList();
+                var usr = userId.Trim();
+                query = query.Where(b => b.UserId == usr);
             }
 
             if (!string.IsNullOrWhiteSpace(date))
             {
-                bookings = bookings.Where(b => b.Date == date.Trim()).ToList();
+                var targetDate = date.Trim();
+                query = query.Where(b => b.Date == targetDate);
             }
 
             if (!string.IsNullOrWhiteSpace(startDate))
             {
                 var start = startDate.Trim();
-                bookings = bookings.Where(b => string.CompareOrdinal(b.Date, start) >= 0).ToList();
+                query = query.Where(b => string.Compare(b.Date, start) >= 0);
             }
 
             if (!string.IsNullOrWhiteSpace(endDate))
             {
                 var end = endDate.Trim();
-                bookings = bookings.Where(b => string.CompareOrdinal(b.Date, end) <= 0).ToList();
+                query = query.Where(b => string.Compare(b.Date, end) <= 0);
             }
 
             if (status.HasValue)
             {
-                bookings = bookings.Where(b => b.Status == status.Value).ToList();
+                var targetStatus = status.Value;
+                query = query.Where(b => b.Status == targetStatus);
             }
 
             if (slot.HasValue)
             {
-                bookings = bookings.Where(b => b.Slot == slot.Value).ToList();
+                var targetSlot = slot.Value;
+                query = query.Where(b => b.Slot == targetSlot);
             }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                var term = search.Trim();
-                bookings = bookings.Where(b =>
-                    b.UserName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    b.DeskCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    b.UserDepartment.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    b.LocationName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    (b.ApprovalReason?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+                var termLower = search.Trim().ToLowerInvariant();
+                query = query.Where(b =>
+                    b.UserName.ToLower().Contains(termLower) ||
+                    b.DeskCode.ToLower().Contains(termLower) ||
+                    b.UserDepartment.ToLower().Contains(termLower) ||
+                    b.LocationName.ToLower().Contains(termLower) ||
+                    (b.ApprovalReason != null && b.ApprovalReason.ToLower().Contains(termLower)));
             }
 
+            var bookings = await query.ToListAsync();
             return Results.Ok(bookings);
         })
         .WithName("GetBookings")

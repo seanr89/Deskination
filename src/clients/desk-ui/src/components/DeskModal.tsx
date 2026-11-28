@@ -94,36 +94,38 @@ export const DeskModal: React.FC<DeskModalProps> = ({ desk, onClose, onBookingSu
     slotChoice === 'afternoon' ? avail.afternoon :
     avail.full_day;
 
-  const handleAction = () => {
+  const handleAction = async () => {
     setIsSubmitting(true);
     setStatusMessage(null);
 
-    if (requiresApproval) {
-      if (!justification.trim()) {
-        setStatusMessage({ type: 'error', text: 'Please provide a business justification for this reservation request.' });
-        setIsSubmitting(false);
-        return;
-      }
+    try {
+      if (requiresApproval) {
+        if (!justification.trim()) {
+          setStatusMessage({ type: 'error', text: 'Please provide a business justification for this reservation request.' });
+          return;
+        }
 
-      const result = requestDeskBooking(desk.id, selectedDate, slotChoice, justification.trim());
-      if (result.success && result.booking) {
-        setStatusMessage({ type: 'success', text: result.message });
-        if (onBookingSuccess) onBookingSuccess(result.booking);
-        setTimeout(() => onClose(), 1600);
+        const result = await requestDeskBooking(desk.id, selectedDate, slotChoice, justification.trim());
+        if (result.success && result.booking) {
+          setStatusMessage({ type: 'success', text: result.message });
+          if (onBookingSuccess) onBookingSuccess(result.booking);
+          setTimeout(() => onClose(), 1600);
+        } else {
+          setStatusMessage({ type: 'error', text: result.message });
+        }
       } else {
-        setStatusMessage({ type: 'error', text: result.message });
+        const result = await bookDesk(desk.id, selectedDate, slotChoice, notes.trim() || undefined);
+        if (result.success && result.booking) {
+          setStatusMessage({ type: 'success', text: result.message });
+          if (onBookingSuccess) onBookingSuccess(result.booking);
+          setTimeout(() => onClose(), 1400);
+        } else {
+          setStatusMessage({ type: 'error', text: result.message });
+        }
       }
-    } else {
-      const result = bookDesk(desk.id, selectedDate, slotChoice, notes.trim() || undefined);
-      if (result.success && result.booking) {
-        setStatusMessage({ type: 'success', text: result.message });
-        if (onBookingSuccess) onBookingSuccess(result.booking);
-        setTimeout(() => onClose(), 1400);
-      } else {
-        setStatusMessage({ type: 'error', text: result.message });
-      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleCancelBooking = (bookingId: string) => {
@@ -498,7 +500,7 @@ export const DeskModal: React.FC<DeskModalProps> = ({ desk, onClose, onBookingSu
           {!existingActiveBooking && !existingPendingRequest && (
             <button
               type="button"
-              onClick={handleAction}
+              onClick={() => void handleAction()}
               disabled={!isChoiceAvailable || isSubmitting || desk.status === 'maintenance'}
               className={`px-5 py-2 text-xs font-medium text-white rounded-lg shadow-xs transition-colors flex items-center gap-2 ${
                 requiresApproval

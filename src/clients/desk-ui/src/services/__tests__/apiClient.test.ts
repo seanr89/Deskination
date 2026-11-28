@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  ApiError,
   buildAuthHeaders,
   apiRequest,
   fetchUsers,
@@ -15,10 +16,12 @@ import {
   deleteLocationApi,
   updateFloorElementsApi,
   fetchLocationOccupancy,
+  fetchLocationOccupancyRange,
   fetchLocationColleagues,
   fetchDesks,
   fetchDeskById,
   fetchDeskAvailability,
+  fetchDesksAvailability,
   createDeskApi,
   updateDeskApi,
   updateDeskAllocationApi,
@@ -114,9 +117,9 @@ describe('apiClient', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('formats HTTP error status and response body when response is not ok', async () => {
+    it('formats HTTP error status and response body when response is not ok and exposes ApiError metadata', async () => {
       mockedGetCurrentIdToken.mockResolvedValue('jwt-abc');
-      fetchMock.mockResolvedValue({
+      fetchMock.mockResolvedValueOnce({
         ok: false,
         status: 409,
         statusText: 'Conflict',
@@ -126,6 +129,24 @@ describe('apiClient', () => {
       await expect(apiRequest('/api/bookings', { method: 'POST' })).rejects.toThrow(
         'API Error (409 Conflict): Desk already booked for full_day'
       );
+
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        text: async () => JSON.stringify({ success: false, message: 'Slot already reserved' }),
+      });
+
+      try {
+        await apiRequest('/api/bookings', { method: 'POST' });
+        expect.fail('Expected ApiError to be thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError);
+        const apiErr = err as ApiError;
+        expect(apiErr.status).toBe(409);
+        expect(apiErr.serverMessage).toBe('Slot already reserved');
+        expect(apiErr.body).toEqual({ success: false, message: 'Slot already reserved' });
+      }
     });
 
     it('returns undefined when response status is 204 No Content', async () => {
@@ -446,6 +467,16 @@ describe('apiClient', () => {
       );
     });
 
+    it('fetchLocationOccupancyRange calls GET /api/locations/:id/occupancy/range with startDate and endDate', async () => {
+      await fetchLocationOccupancyRange('loc-london', '2026-11-15', '2026-11-20');
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /\/api\/locations\/loc-london\/occupancy\/range\?startDate=2026-11-15&endDate=2026-11-20$/
+        ),
+        expect.any(Object)
+      );
+    });
+
     it('fetchLocationColleagues calls GET /api/locations/:id/colleagues with date query', async () => {
       await fetchLocationColleagues('loc-dubai', '2026-11-15');
       expect(fetchMock).toHaveBeenCalledWith(
@@ -466,6 +497,16 @@ describe('apiClient', () => {
       await fetchDeskAvailability('d-401', '2026-11-15');
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringMatching(/\/api\/desks\/d-401\/availability\?date=2026-11-15$/),
+        expect.any(Object)
+      );
+    });
+
+    it('fetchDesksAvailability calls GET /api/desks/availability with optional query params', async () => {
+      await fetchDesksAvailability({ date: '2026-11-15', locationId: 'loc-london', floorId: 'flr-4' });
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /\/api\/desks\/availability\?date=2026-11-15&locationId=loc-london&floorId=flr-4$/
+        ),
         expect.any(Object)
       );
     });

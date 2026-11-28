@@ -35,6 +35,28 @@ export interface WorkspaceSnapshotApiResponse {
   bookings: Booking[];
 }
 
+export class ApiError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+  readonly body?: unknown;
+  readonly serverMessage?: string;
+
+  constructor(
+    status: number,
+    statusText: string,
+    rawBody?: string,
+    parsedBody?: unknown,
+    serverMessage?: string
+  ) {
+    super(`API Error (${status} ${statusText})${rawBody ? `: ${rawBody}` : ''}`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.statusText = statusText;
+    this.body = parsedBody;
+    this.serverMessage = serverMessage;
+  }
+}
+
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.trim() ||
   import.meta.env.VITE_BOOKING_API_URL?.trim() ||
@@ -105,8 +127,27 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '');
-    throw new Error(
-      `API Error (${response.status} ${response.statusText})${errorBody ? `: ${errorBody}` : ''}`
+    let parsedBody: unknown = errorBody || undefined;
+    let serverMessage: string | undefined;
+
+    if (errorBody) {
+      try {
+        const json = JSON.parse(errorBody) as { message?: unknown };
+        parsedBody = json;
+        if (typeof json.message === 'string' && json.message.trim()) {
+          serverMessage = json.message;
+        }
+      } catch {
+        serverMessage = errorBody;
+      }
+    }
+
+    throw new ApiError(
+      response.status,
+      response.statusText,
+      errorBody || undefined,
+      parsedBody,
+      serverMessage
     );
   }
 
@@ -229,6 +270,19 @@ export function fetchLocationOccupancy(
   );
 }
 
+export function fetchLocationOccupancyRange(
+  locationId: string,
+  startDate: string,
+  endDate: string
+): Promise<Record<string, { total: number; booked: number; rate: number }>> {
+  return apiRequest<Record<string, { total: number; booked: number; rate: number }>>(
+    `/api/locations/${encodeURIComponent(locationId)}/occupancy/range${buildQueryString({
+      startDate,
+      endDate,
+    })}`
+  );
+}
+
 export function fetchLocationColleagues(
   locationId: string,
   date: string
@@ -262,6 +316,16 @@ export function fetchDeskAvailability(
 ): Promise<SlotAvailability> {
   return apiRequest<SlotAvailability>(
     `/api/desks/${encodeURIComponent(deskId)}/availability${buildQueryString({ date })}`
+  );
+}
+
+export function fetchDesksAvailability(params?: {
+  date?: string;
+  locationId?: string;
+  floorId?: string;
+}): Promise<Record<string, SlotAvailability>> {
+  return apiRequest<Record<string, SlotAvailability>>(
+    `/api/desks/availability${buildQueryString(params)}`
   );
 }
 

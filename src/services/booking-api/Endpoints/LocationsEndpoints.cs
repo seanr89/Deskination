@@ -1,3 +1,4 @@
+using System.Globalization;
 using BookingApi.Auth;
 using BookingApi.Data;
 using BookingApi.Models;
@@ -228,6 +229,79 @@ public static class LocationsEndpoints
         })
         .WithName("GetLocationOccupancy")
         .WithSummary("Returns daily desk occupancy metrics for a location.");
+
+        group.MapGet("/{id}/occupancy/range", async (
+            string id,
+            string startDate,
+            string endDate,
+            DeskinationDbContext db) =>
+        {
+            if (!DateOnly.TryParseExact(startDate?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ||
+                !DateOnly.TryParseExact(endDate?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
+            {
+                return Results.BadRequest(new { message = "startDate and endDate must be valid YYYY-MM-DD dates." });
+            }
+
+            if (end < start)
+            {
+                return Results.BadRequest(new { message = "endDate must be on or after startDate." });
+            }
+
+            var daySpan = end.DayNumber - start.DayNumber + 1;
+            if (daySpan > 90)
+            {
+                return Results.BadRequest(new { message = "Date range cannot exceed 90 days." });
+            }
+
+            var startStr = start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var endStr = end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            var activeDesksCount = await db.Desks
+                .AsNoTracking()
+                .CountAsync(d => d.LocationId == id && d.Status == DeskStatus.Active);
+
+            var result = new Dictionary<string, LocationOccupancyResponse>(daySpan, StringComparer.Ordinal);
+            if (activeDesksCount == 0)
+            {
+                for (var d = start; d <= end; d = d.AddDays(1))
+                {
+                    result[d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)] =
+                        new LocationOccupancyResponse(Total: 0, Booked: 0, Rate: 0);
+                }
+
+                return Results.Ok(result);
+            }
+
+            var activeBookingPairs = await db.Bookings
+                .AsNoTracking()
+                .Where(b =>
+                    b.LocationId == id &&
+                    string.Compare(b.Date, startStr) >= 0 &&
+                    string.Compare(b.Date, endStr) <= 0 &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Rejected)
+                .Select(b => new { b.Date, b.DeskId })
+                .ToListAsync();
+
+            var bookedCountByDate = activeBookingPairs
+                .GroupBy(x => x.Date, StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.DeskId).Distinct(StringComparer.Ordinal).Count(),
+                    StringComparer.Ordinal);
+
+            for (var d = start; d <= end; d = d.AddDays(1))
+            {
+                var iso = d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var booked = bookedCountByDate.GetValueOrDefault(iso, 0);
+                var rate = (int)Math.Round((double)booked / activeDesksCount * 100);
+                result[iso] = new LocationOccupancyResponse(Total: activeDesksCount, Booked: booked, Rate: rate);
+            }
+
+            return Results.Ok(result);
+        })
+        .WithName("GetLocationOccupancyRange")
+        .WithSummary("Returns daily desk occupancy metrics for a location across a YYYY-MM-DD date range.");
 
         group.MapGet("/{id}/colleagues", async (string id, string? date, DeskinationDbContext db) =>
         {
