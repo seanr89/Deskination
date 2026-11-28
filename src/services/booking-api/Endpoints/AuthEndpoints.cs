@@ -38,8 +38,7 @@ public static class AuthEndpoints
 
         authGroup.MapGet("/admin-check", async (ClaimsPrincipal user, DeskinationDbContext db) =>
         {
-            var users = await db.Users.AsNoTracking().ToListAsync();
-            var resolved = user.ToAuthenticatedUserResponse(users);
+            var resolved = await user.ResolveAuthenticatedUserAsync(db);
             return TypedResults.Ok(new
             {
                 authorized = true,
@@ -60,8 +59,8 @@ public static class AuthEndpoints
         ClaimsPrincipal user,
         DeskinationDbContext db)
     {
-        var users = await db.Users.AsNoTracking().ToListAsync();
-        return TypedResults.Ok(user.ToAuthenticatedUserResponse(users));
+        var resolved = await user.ResolveAuthenticatedUserAsync(db);
+        return TypedResults.Ok(resolved);
     }
 }
 

@@ -164,12 +164,41 @@ public static class FirebaseAuthExtensions
         );
     }
 
+    public static async Task<AuthenticatedUserResponse> ResolveAuthenticatedUserAsync(
+        this ClaimsPrincipal principal,
+        DeskinationDbContext db)
+    {
+        var uid = principal.GetFirebaseUid() ?? "unknown-uid";
+        var email = principal.GetEmail()?.Trim();
+
+        User? matchedUser;
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var normalizedEmail = email.ToLowerInvariant();
+            matchedUser = await db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+        }
+        else
+        {
+            var prefixedUidLower = $"usr-{uid}".ToLowerInvariant();
+            var normalizedUidLower = uid.ToLowerInvariant();
+            matchedUser = await db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u =>
+                    u.Id.ToLower() == prefixedUidLower ||
+                    u.Id.ToLower() == normalizedUidLower);
+        }
+
+        return principal.ToAuthenticatedUserResponse(matchedUser is not null ? [matchedUser] : []);
+    }
+
     public static async Task<User> ResolveWorkspaceUserAsync(
         this ClaimsPrincipal principal,
         DeskinationDbContext db)
     {
-        var users = await db.Users.AsNoTracking().ToListAsync();
-        return principal.ToAuthenticatedUserResponse(users).Profile;
+        var resolved = await principal.ResolveAuthenticatedUserAsync(db);
+        return resolved.Profile;
     }
 }
 

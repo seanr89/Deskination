@@ -13,8 +13,8 @@ This skill guides development of the Deskination frontend (`src/clients/desk-ui`
 ## Core Architecture
 
 1. **Provider Hierarchy (`src/App.tsx`)**:
-   - `<DeskBookingProvider>` (`src/context/DeskBookingContext.tsx`) wraps `<AuthProvider>` (`src/context/AuthContext.tsx`), which wraps `<MainApp />`.
-   - `DeskBookingProvider` subscribes to Firebase auth changes (`subscribeToAuthChanges`) and hydrates `users`, `locations`, `desks`, and `bookings` from `booking-api` when authenticated (clearing state on sign-out). There is no client-side mock data.
+   - `<DeskBookingProvider>` (`src/context/DeskBookingContext.tsx`, composed from `src/context/deskBookingTypes.ts` and `src/hooks/useWorkspaceData.ts`, `useWorkspaceAnalytics.ts`, `useBookingActions.ts`, `useAdminWorkspaceActions.ts`) wraps `<AuthProvider>` (`src/context/AuthContext.tsx`), which wraps `<MainApp />`.
+   - `DeskBookingProvider` subscribes to Firebase auth changes (`subscribeToAuthChanges`), hydrates `users`, `locations`, `desks`, and `bookings` from `booking-api`, caches backend-computed availability/occupancy/stats/colleagues, and delegates `bookDesk`/`requestDeskBooking` validation asynchronously to `POST /api/bookings`. There is no client-side mock data.
    - `AuthProvider` synchronizes the signed-in Firebase user into `DeskBookingContext` via `upsertUser(mappedUser)` (`PUT /api/users/me`).
 2. **Firebase Authentication Layer**:
    - **Config (`src/config/firebase.ts`)**: Resolves `VITE_FIREBASE_*` variables from `.env` (project `officewho-53cec`) or runtime `localStorage` fallback (`deskination_firebase_config_v1`), including optional Firebase Auth Emulator connection.

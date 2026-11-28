@@ -29,9 +29,9 @@
 1. **Firebase Auth & Session State**:
    - Access Firebase instances exclusively through `src/config/firebase.ts` (`getFirebaseApp`, `getFirebaseAuth`, `resolveFirebaseConfig`), supporting `VITE_FIREBASE_*` env vars or runtime `localStorage` (`deskination_firebase_config_v1`).
    - Consume auth state via `useAuth()` (`src/hooks/useAuth.ts`), never `getAuth()` directly in components.
-   - Keep `DeskBookingContext` (`src/context/DeskBookingContext.tsx`) synchronized with `AuthContext` (`src/context/AuthContext.tsx`) via `upsertUser(mappedUser)` (`PUT /api/users/me`). No client-side mock data exists; all workspace data hydrates from `booking-api`.
+   - Keep `DeskBookingContext` (`src/context/DeskBookingContext.tsx`, backed by `src/context/deskBookingTypes.ts`, `src/hooks/useWorkspaceData.ts`, `src/hooks/useWorkspaceAnalytics.ts`, `src/hooks/useBookingActions.ts`, and `src/hooks/useAdminWorkspaceActions.ts`) synchronized with `AuthContext` (`src/context/AuthContext.tsx`) via `upsertUser(mappedUser)` (`PUT /api/users/me`). No client-side mock data exists; workspace data, availability, occupancy, stats, and booking policy validation all originate from `booking-api`.
 2. **Backend API Requests**:
-   - Route all HTTP calls to `booking-api` through `apiRequest<T>()` and typed wrappers in `src/services/apiClient.ts`, which resolves `VITE_API_BASE_URL` (`http://localhost:8080`) and injects `Authorization: Bearer <idToken>`.
+   - Route all HTTP calls to `booking-api` through `apiRequest<T>()` (`ApiError` on non-2xx responses) and typed wrappers in `src/services/apiClient.ts` (including `fetchDesksAvailability` and `fetchLocationOccupancyRange`), which resolves `VITE_API_BASE_URL` (`http://localhost:8080`) and injects `Authorization: Bearer <idToken>`.
 3. **Bundle Splitting (`vite.config.ts`)**:
    - Preserve lazy imports in `src/App.tsx` and `build.rolldownOptions.output.codeSplitting.groups` (`firebase`, `react-vendor`, `lucide-icons`) to keep production chunks under Vite's 500 kB warning limit.
 4. **Forms & Accessibility**:

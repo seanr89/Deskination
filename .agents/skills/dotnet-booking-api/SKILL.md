@@ -26,7 +26,7 @@ All C# models and DTOs in `src/services/booking-api/Models/DeskBookingModels.cs`
   - Reads `Firebase:ProjectId` (default `"officewho-53cec"`), configuring `Authority = https://securetoken.google.com/{ProjectId}` and `ValidAudience = {ProjectId}`.
   - Extracts UID (`user_id`, `ClaimTypes.NameIdentifier`, `sub`) and email (`email`, `ClaimTypes.Email`).
   - Registers `AuthPolicies.EmployeeOrAdmin` (`RequireAuthenticatedUser()`) and `AuthPolicies.AdminOnly` (`role=admin`, `admin=true`, or `elena.rostova@acme-corp.internal`).
-  - `ResolveWorkspaceUserAsync(db)` maps the authenticated `ClaimsPrincipal` to a `User` in `db.Users` (matching by email or `usr-{uid}`, or synthesizing a fallback profile).
+  - `ResolveAuthenticatedUserAsync(db)` / `ResolveWorkspaceUserAsync(db)` queries `db.Users` via targeted email or UID lookup (without loading the full `Users` table) and synthesizes a fallback profile if not yet persisted.
 - **Testability**: `Program.cs` ends with `public partial class Program;` for `WebApplicationFactory<Program>`.
 
 ## 3. Implemented Minimal API Endpoints
@@ -40,9 +40,9 @@ All C# models and DTOs in `src/services/booking-api/Models/DeskBookingModels.cs`
 - **Users (`Endpoints/UsersEndpoints.cs`, `/api/users`, `EmployeeOrAdmin`)**:
   - `GET /api/users` (optional `search`, `department`, `role`), `GET /api/users/me`, `PUT /api/users/me`, `GET /api/users/{id}`, `POST /api/users`, `GET /api/users/{id}/stats` (`referenceDate`, `month`).
 - **Locations (`Endpoints/LocationsEndpoints.cs`, `/api/locations`, `EmployeeOrAdmin`)**:
-  - `GET /api/locations`, `GET /api/locations/{id}`, `POST /api/locations` (`AdminOnly`), `PUT /api/locations/{id}` (`AdminOnly`), `DELETE /api/locations/{id}` (`AdminOnly`, cascades desks/bookings), `PUT /api/locations/{locationId}/floors/{floorId}/elements` (`AdminOnly`), `GET /api/locations/{id}/occupancy?date=YYYY-MM-DD`, `GET /api/locations/{id}/colleagues?date=YYYY-MM-DD`.
+  - `GET /api/locations`, `GET /api/locations/{id}`, `POST /api/locations` (`AdminOnly`), `PUT /api/locations/{id}` (`AdminOnly`), `DELETE /api/locations/{id}` (`AdminOnly`, cascades desks/bookings), `PUT /api/locations/{locationId}/floors/{floorId}/elements` (`AdminOnly`), `GET /api/locations/{id}/occupancy?date=YYYY-MM-DD`, `GET /api/locations/{id}/occupancy/range?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`, `GET /api/locations/{id}/colleagues?date=YYYY-MM-DD`.
 - **Desks (`Endpoints/DesksEndpoints.cs`, `/api/desks`, `EmployeeOrAdmin`)**:
-  - `GET /api/desks` (filters: `locationId`, `floorId`, `zoneId`, `deskType`, `allocationType`, `status`, `search`), `GET /api/desks/{id}`, `GET /api/desks/{id}/availability?date=YYYY-MM-DD`, `POST /api/desks` (`AdminOnly`), `PUT /api/desks/{id}` (`AdminOnly`), `PATCH /api/desks/{id}/allocation` (`AdminOnly`), `PATCH /api/desks/{id}/position` (`AdminOnly`), `PATCH /api/desks/positions` (`AdminOnly`, batch transaction), `DELETE /api/desks/{id}` (`AdminOnly`).
+  - `GET /api/desks` (filters: `locationId`, `floorId`, `zoneId`, `deskType`, `allocationType`, `status`, `search`), `GET /api/desks/availability?date=YYYY-MM-DD&locationId=...&floorId=...`, `GET /api/desks/{id}`, `GET /api/desks/{id}/availability?date=YYYY-MM-DD`, `POST /api/desks` (`AdminOnly`), `PUT /api/desks/{id}` (`AdminOnly`), `PATCH /api/desks/{id}/allocation` (`AdminOnly`), `PATCH /api/desks/{id}/position` (`AdminOnly`), `PATCH /api/desks/positions` (`AdminOnly`, single-query batch transaction), `DELETE /api/desks/{id}` (`AdminOnly`).
 - **Bookings (`Endpoints/BookingsEndpoints.cs`, `/api/bookings`, `EmployeeOrAdmin`)**:
   - `GET /api/bookings` (filters: `locationId`, `floorId`, `deskId`, `userId`, `date`, `startDate`, `endDate`, `status`, `slot`, `search`), `GET /api/bookings/{id}`, `POST /api/bookings` (transactional create/request returning `BookingActionResponse`), `PUT /api/bookings/{id}`, `DELETE /api/bookings/{id}`, `POST /api/bookings/{id}/cancel`, `POST /api/bookings/{id}/check-in`, `POST /api/bookings/{id}/approve` (`AdminOnly`), `POST /api/bookings/{id}/reject` (`AdminOnly`).
 - **Workspace (`Endpoints/WorkspaceEndpoints.cs`, `/api/workspace`, `AdminOnly`)**:

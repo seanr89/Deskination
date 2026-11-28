@@ -24,37 +24,52 @@ public static class DesksEndpoints
             DeskStatus? status = null,
             string? search = null) =>
         {
-            var desks = await db.Desks.AsNoTracking().ToListAsync();
+            IQueryable<Desk> query = db.Desks.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(locationId))
             {
-                desks = desks.Where(d => d.LocationId == locationId.Trim()).ToList();
+                var loc = locationId.Trim();
+                query = query.Where(d => d.LocationId == loc);
             }
 
             if (!string.IsNullOrWhiteSpace(floorId))
             {
-                desks = desks.Where(d => d.FloorId == floorId.Trim()).ToList();
+                var flr = floorId.Trim();
+                query = query.Where(d => d.FloorId == flr);
             }
 
             if (!string.IsNullOrWhiteSpace(zoneId))
             {
-                desks = desks.Where(d => d.ZoneId == zoneId.Trim()).ToList();
+                var zn = zoneId.Trim();
+                query = query.Where(d => d.ZoneId == zn);
             }
 
             if (deskType.HasValue)
             {
-                desks = desks.Where(d => d.DeskType == deskType.Value).ToList();
+                var targetDeskType = deskType.Value;
+                query = query.Where(d => d.DeskType == targetDeskType);
             }
 
             if (allocationType.HasValue)
             {
-                desks = desks.Where(d => (d.AllocationType ?? DeskAllocationType.Unreserved) == allocationType.Value).ToList();
+                var targetAllocation = allocationType.Value;
+                if (targetAllocation == DeskAllocationType.Unreserved)
+                {
+                    query = query.Where(d => d.AllocationType == null || d.AllocationType == DeskAllocationType.Unreserved);
+                }
+                else
+                {
+                    query = query.Where(d => d.AllocationType == targetAllocation);
+                }
             }
 
             if (status.HasValue)
             {
-                desks = desks.Where(d => d.Status == status.Value).ToList();
+                var targetStatus = status.Value;
+                query = query.Where(d => d.Status == targetStatus);
             }
+
+            var desks = await query.ToListAsync();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -71,6 +86,60 @@ public static class DesksEndpoints
         })
         .WithName("GetDesks")
         .WithSummary("Returns Desk[] inventory with optional location, floor, zone, type, allocation, status, and search filters.");
+
+        group.MapGet("/availability", async (
+            ClaimsPrincipal principal,
+            DeskinationDbContext db,
+            string? date = null,
+            string? locationId = null,
+            string? floorId = null) =>
+        {
+            var targetDate = string.IsNullOrWhiteSpace(date)
+                ? BookingDomainRules.GetTodayUtcDateString()
+                : date.Trim();
+
+            IQueryable<Desk> deskQuery = db.Desks.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(locationId))
+            {
+                var loc = locationId.Trim();
+                deskQuery = deskQuery.Where(d => d.LocationId == loc);
+            }
+
+            if (!string.IsNullOrWhiteSpace(floorId))
+            {
+                var flr = floorId.Trim();
+                deskQuery = deskQuery.Where(d => d.FloorId == flr);
+            }
+
+            var desks = await deskQuery.ToListAsync();
+            if (desks.Count == 0)
+            {
+                return Results.Ok(new Dictionary<string, SlotAvailability>());
+            }
+
+            var caller = await principal.ResolveWorkspaceUserAsync(db);
+            var deskIds = desks.Select(d => d.Id).ToList();
+
+            var bookingsOnDate = await db.Bookings
+                .AsNoTracking()
+                .Where(b => deskIds.Contains(b.DeskId) && b.Date == targetDate)
+                .ToListAsync();
+
+            var bookingsByDesk = bookingsOnDate
+                .GroupBy(b => b.DeskId, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => (IEnumerable<Booking>)g, StringComparer.Ordinal);
+
+            var result = new Dictionary<string, SlotAvailability>(desks.Count, StringComparer.Ordinal);
+            foreach (var desk in desks)
+            {
+                var deskBookings = bookingsByDesk.TryGetValue(desk.Id, out var list) ? list : [];
+                result[desk.Id] = BookingDomainRules.ComputeDeskAvailability(desk, deskBookings, caller);
+            }
+
+            return Results.Ok(result);
+        })
+        .WithName("GetDesksAvailability")
+        .WithSummary("Computes SlotAvailability map keyed by desk ID for the requested date and optional location/floor.");
 
         group.MapGet("/{id}", async (string id, DeskinationDbContext db) =>
         {
@@ -233,32 +302,45 @@ public static class DesksEndpoints
             BatchUpdateDeskPositionsRequest request,
             DeskinationDbContext db) =>
         {
+            var updateMap = (request.Updates ?? [])
+                .GroupBy(u => u.Id, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+
+            if (updateMap.Count == 0)
+            {
+                return Results.Ok(Array.Empty<Desk>());
+            }
+
             await using var tx = await db.Database.BeginTransactionAsync();
 
-            var updateMap = (request.Updates ?? [])
-                .ToDictionary(u => u.Id, u => u, StringComparer.Ordinal);
+            var targetIds = updateMap.Keys.ToList();
+            var existingById = (await db.Desks
+                    .AsNoTracking()
+                    .Where(d => targetIds.Contains(d.Id))
+                    .ToListAsync())
+                .ToDictionary(d => d.Id, StringComparer.Ordinal);
 
-            var updatedDesks = new List<Desk>();
+            var updatedDesks = new List<Desk>(existingById.Count);
             foreach (var (deskId, item) in updateMap)
             {
-                var existing = await db.Desks.FindAsync(deskId);
-                if (existing is null)
+                if (!existingById.TryGetValue(deskId, out var existing))
                 {
                     continue;
                 }
 
-                var updated = existing with
+                updatedDesks.Add(existing with
                 {
                     Position = item.Position,
                     Rotation = item.Rotation ?? existing.Rotation
-                };
-
-                db.Entry(existing).State = EntityState.Detached;
-                db.Desks.Update(updated);
-                updatedDesks.Add(updated);
+                });
             }
 
-            await db.SaveChangesAsync();
+            if (updatedDesks.Count > 0)
+            {
+                db.Desks.UpdateRange(updatedDesks);
+                await db.SaveChangesAsync();
+            }
+
             await tx.CommitAsync();
 
             return Results.Ok(updatedDesks);
